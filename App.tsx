@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Menu, Zap } from 'lucide-react';
 import Sidebar from './components/Sidebar';
@@ -10,7 +10,21 @@ import AuthScreen from './components/AuthScreen';
 import AccountSettingsModal from './components/AccountSettingsModal';
 import { StoreProvider } from './context/StoreContext';
 
+// Capacitor Status Bar (only runs on native)
+const initStatusBar = async () => {
+  try {
+    const { StatusBar, Style } = await import('@capacitor/status-bar');
+    await StatusBar.setStyle({ style: Style.Dark });
+    await StatusBar.setBackgroundColor({ color: '#0f172a' });
+  } catch (e) {
+    // Not running on native platform
+  }
+};
+
 const App = () => {
+  useEffect(() => {
+    initStatusBar();
+  }, []);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);

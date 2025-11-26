@@ -92,7 +92,8 @@ const TradeLog = () => {
                    <button onClick={() => setIsModalOpen(true)} className="text-brand-500 font-bold hover:underline">Log your first trade</button>
                </div>
            ) : (
-           <table className="w-full text-left border-collapse">
+           <div className="overflow-x-auto">
+           <table className="w-full text-left border-collapse min-w-[700px]">
                <thead>
                    <tr className="bg-slate-900/50 border-b border-slate-800 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                        <th className="px-4 py-4">Status</th>
@@ -214,6 +215,7 @@ const TradeLog = () => {
                    })}
                </tbody>
            </table>
+           </div>
            )}
            <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
                <span className="text-xs text-slate-500">
