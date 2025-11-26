@@ -1,14 +1,15 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
-import { ArrowRight, Filter, Trash2, Plus, Wallet, ChevronDown, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ArrowRight, Trash2, Plus, Wallet, ChevronDown, ToggleLeft, ToggleRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import TradeWizard from './TradeWizard';
 
 const TradeLog = () => {
-  const { trades, tags, deleteTrade, accounts, updateTrade } = useStore();
+  const { trades, deleteTrade, accounts, updateTrade } = useStore();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>('all');
   const [showAccountFilter, setShowAccountFilter] = useState(false);
+  const [openAccountDropdownId, setOpenAccountDropdownId] = useState<string | null>(null);
 
   const visibleAccounts = accounts.filter(a => !a.isHidden);
 
@@ -94,22 +95,26 @@ const TradeLog = () => {
            <table className="w-full text-left border-collapse">
                <thead>
                    <tr className="bg-slate-900/50 border-b border-slate-800 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                       <th className="px-6 py-4">Status</th>
-                       <th className="px-6 py-4">Symbol</th>
-                       <th className="px-6 py-4">Account</th>
-                       <th className="px-6 py-4">Session</th>
-                       <th className="px-6 py-4">Side</th>
-                       <th className="px-6 py-4 text-right">Net P&L</th>
-                       <th className="px-6 py-4 text-center">Include</th>
-                       <th className="px-6 py-4 text-right">Actions</th>
+                       <th className="px-4 py-4">Status</th>
+                       <th className="px-4 py-4">Symbol</th>
+                       <th className="px-4 py-4">Session</th>
+                       <th className="px-4 py-4">Side</th>
+                       <th className="px-4 py-4 text-right">Net P&L</th>
+                       <th className="px-4 py-4 text-center">R:R</th>
+                       <th className="px-4 py-4">Account</th>
+                       <th className="px-4 py-4 text-right">Actions</th>
                    </tr>
                </thead>
                <tbody className="divide-y divide-slate-800">
                    {filteredTrades.map((trade) => {
                        const tradeAccount = accounts.find(a => a.id === trade.accountId);
+                       // Calculate R:R for display (works for both wins and losses)
+                       const hasRR = trade.riskAmount && trade.riskAmount > 0 && trade.tpAmount && trade.tpAmount > 0;
+                       const rrValue = hasRR ? trade.tpAmount! / trade.riskAmount! : null;
+                       
                        return (
                        <tr key={trade.id} className="hover:bg-slate-800/50 transition-colors group">
-                           <td className="px-6 py-4">
+                           <td className="px-4 py-4">
                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
                                    trade.status === 'WIN' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
                                    trade.status === 'LOSS' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' : 'bg-slate-700 text-slate-300 border-slate-600'
@@ -117,43 +122,80 @@ const TradeLog = () => {
                                    {trade.status}
                                </span>
                            </td>
-                           <td className="px-6 py-4">
+                           <td className="px-4 py-4">
                                <div className="font-bold text-white">{trade.symbol}</div>
                                <div className="text-xs text-slate-500">{trade.date}</div>
                            </td>
-                           <td className="px-6 py-4">
-                               <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">
-                                   {tradeAccount?.name || '-'}
-                               </span>
-                           </td>
-                           <td className="px-6 py-4 text-slate-400 text-sm">
+                           <td className="px-4 py-4 text-slate-400 text-sm">
                                <div className="flex items-center gap-2">
                                  <span className={`w-1.5 h-1.5 rounded-full ${trade.session === 'New York' ? 'bg-emerald-500' : trade.session === 'London' ? 'bg-indigo-500' : 'bg-slate-500'}`}></span>
                                  {trade.session}
                                </div>
                            </td>
-                           <td className="px-6 py-4 text-sm">
+                           <td className="px-4 py-4 text-sm">
                                <span className={trade.side === 'LONG' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
                                    {trade.side}
                                </span>
                            </td>
-                           <td className={`px-6 py-4 text-right font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                           <td className={`px-4 py-4 text-right font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                {trade.pnl >= 0 ? '+' : ''}${Math.abs(trade.pnl).toFixed(2)}
                            </td>
-                           <td className="px-6 py-4 text-center">
-                               <button 
-                                 onClick={() => updateTrade(trade.id, { includeInAccount: !(trade.includeInAccount !== false) })}
-                                 className="text-slate-400 hover:text-white transition-colors"
-                                 title={trade.includeInAccount !== false ? 'Included in account balance' : 'Excluded from account balance'}
-                               >
-                                 {trade.includeInAccount !== false ? (
-                                   <ToggleRight size={20} className="text-brand-500" />
-                                 ) : (
-                                   <ToggleLeft size={20} className="text-slate-600" />
-                                 )}
-                               </button>
+                           <td className="px-4 py-4 text-center">
+                               {rrValue ? (
+                                 <span className={`text-xs font-mono px-2 py-1 rounded ${
+                                   trade.status === 'WIN' 
+                                     ? 'text-brand-400 bg-brand-500/10' 
+                                     : 'text-slate-400 bg-slate-700/50'
+                                 }`} title={trade.status === 'LOSS' ? 'Potential R:R (if won)' : 'Achieved R:R'}>
+                                   1:{rrValue.toFixed(1)}
+                                   {trade.status === 'LOSS' && <span className="text-slate-500 ml-1">*</span>}
+                                 </span>
+                               ) : (
+                                 <span className="text-xs text-slate-600">-</span>
+                               )}
                            </td>
-                           <td className="px-6 py-4 text-right">
+                           <td className="px-4 py-4">
+                               {visibleAccounts.length === 0 ? (
+                                 <span className="text-xs text-slate-600">-</span>
+                               ) : visibleAccounts.length === 1 ? (
+                                 <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">
+                                   {visibleAccounts[0].name}
+                                 </span>
+                               ) : (
+                                 <div className="relative">
+                                   <button
+                                     onClick={() => setOpenAccountDropdownId(openAccountDropdownId === trade.id ? null : trade.id)}
+                                     className="text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded flex items-center gap-1 transition-colors"
+                                   >
+                                     <span>{tradeAccount?.name || 'Select'}</span>
+                                     <ChevronDown size={12} />
+                                   </button>
+                                   {openAccountDropdownId === trade.id && (
+                                     <>
+                                       <div className="fixed inset-0 z-10" onClick={() => setOpenAccountDropdownId(null)} />
+                                       <div className="absolute top-full left-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 overflow-hidden">
+                                         {visibleAccounts.map(account => (
+                                           <button
+                                             key={account.id}
+                                             onClick={() => {
+                                               updateTrade(trade.id, { accountId: account.id });
+                                               setOpenAccountDropdownId(null);
+                                             }}
+                                             className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors flex items-center justify-between ${
+                                               account.id === trade.accountId ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
+                                             }`}
+                                           >
+                                             <span>{account.name}</span>
+                                             {account.isMain && <span className="text-[9px] uppercase text-slate-500">Main</span>}
+                                           </button>
+                                         ))}
+                                       </div>
+                                     </>
+                                   )}
+                                 </div>
+                               )}
+                           </td>
+                           <td className="px-4 py-4 text-right">
                                <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                    <Link to="/tracking" className="text-slate-500 hover:text-brand-500 transition-colors">
                                        <ArrowRight size={16} />

@@ -170,7 +170,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6">
-          {activeTab === 'profile' ? (
+          {activeTab === 'profile' && (
             <div className="space-y-6">
               {/* Profile Picture */}
               <div className="flex items-center gap-4">
@@ -296,7 +296,9 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                 </div>
               </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'accounts' && (
             <div className="space-y-4">
               {/* No accounts message */}
               {accounts.length === 0 && !showAddAccount && (

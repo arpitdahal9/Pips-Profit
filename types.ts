@@ -61,6 +61,8 @@ export interface Trade {
   // Account linking
   accountId?: string; // Which account this trade belongs to
   includeInAccount?: boolean; // Whether to include in account balance calculations
+  // Risk:Reward (only set for winning trades)
+  riskRewardRatio?: number; // e.g., 2 means 1:2 R:R
 }
 
 export interface DashboardStats {
