@@ -316,6 +316,64 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                 </div>
               )}
 
+              {/* Add First Account Form (when no accounts exist) */}
+              {accounts.length === 0 && showAddAccount && (
+                <div className="p-4 rounded-xl bg-slate-800/50 border border-slate-700">
+                  <h3 className="text-sm font-bold text-white mb-4">Add Your First Trading Account</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Account Name *</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., Main Account, FTMO Challenge"
+                        value={newAccount.name}
+                        onChange={e => setNewAccount({ ...newAccount, name: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Broker (Optional)</label>
+                      <input
+                        type="text"
+                        placeholder="e.g., IC Markets, OANDA"
+                        value={newAccount.broker}
+                        onChange={e => setNewAccount({ ...newAccount, broker: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-slate-500 mb-1 block">Starting Balance *</label>
+                      <input
+                        type="number"
+                        placeholder="e.g., 10000"
+                        value={newAccount.startingBalance}
+                        onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2 mt-4">
+                    <button
+                      onClick={handleAddAccount}
+                      disabled={!newAccount.name.trim() || !newAccount.startingBalance}
+                      className="flex-1 px-4 py-2 bg-brand-500 text-slate-900 rounded-lg font-medium hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Create Account
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowAddAccount(false);
+                        setNewAccount({ name: '', broker: '', startingBalance: '' });
+                      }}
+                      className="px-4 py-2 bg-slate-700 text-slate-300 rounded-lg font-medium hover:bg-slate-600 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {/* Account List */}
               {visibleAccounts.map(account => (
                 <div

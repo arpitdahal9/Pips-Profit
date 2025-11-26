@@ -288,11 +288,9 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
   };
 
   const deleteAccount = (id: string) => {
-    // Don't allow deleting the main account if it's the only one
     const account = accounts.find(a => a.id === id);
-    if (account?.isMain && accounts.length === 1) return;
     
-    // If deleting main account, set another as main
+    // If deleting main account and there are other accounts, set another as main
     if (account?.isMain && accounts.length > 1) {
       const newMain = accounts.find(a => a.id !== id);
       if (newMain) {
@@ -304,6 +302,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       }
     }
     
+    // Allow deleting any account, including the last one
     setAccounts(prev => prev.filter(a => a.id !== id));
   };
 

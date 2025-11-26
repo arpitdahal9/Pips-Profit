@@ -56,16 +56,37 @@ const PerformanceScoreCard = ({ winRate, profitFactor }: { winRate: number, prof
     return (
         <div className="flex-1 glass-panel p-6 rounded-2xl border border-slate-800">
             <h3 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-4">Performance Score</h3>
-            <div className="flex items-center justify-center h-[160px] relative">
+            <div className="flex items-center justify-center h-[120px] relative">
                 <div className="absolute inset-0 flex items-center justify-center">
-                        <div className={`w-32 h-32 rounded-full border-4 border-slate-800 border-t-current border-r-current rotate-45 ${color}`}></div>
+                    <div className={`w-28 h-28 rounded-full border-4 border-slate-800 border-t-current border-r-current rotate-45 ${color}`}></div>
                 </div>
                 <div className="text-center z-10">
-                    <div className="text-5xl font-bold text-white font-mono">{score}</div>
+                    <div className="text-4xl font-bold text-white font-mono">{score}</div>
                     <div className={`text-xs font-bold uppercase tracking-wide mt-1 ${color}`}>{label}</div>
                 </div>
             </div>
-            <p className="text-center text-xs text-slate-500 mt-2">Based on Win Rate & Profit Factor</p>
+            
+            {/* Score Guide - Always visible below */}
+            <div className="mt-4 space-y-1.5">
+                <div className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${score > 80 ? 'bg-emerald-500/10 border border-emerald-500/20' : 'bg-slate-800/30'}`}>
+                    <span className="text-[11px] text-slate-400">&gt; 80</span>
+                    <span className={`text-[11px] font-bold ${score > 80 ? 'text-emerald-400' : 'text-slate-500'}`}>Excellent</span>
+                </div>
+                <div className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${score > 60 && score <= 80 ? 'bg-brand-500/10 border border-brand-500/20' : 'bg-slate-800/30'}`}>
+                    <span className="text-[11px] text-slate-400">&gt; 60</span>
+                    <span className={`text-[11px] font-bold ${score > 60 && score <= 80 ? 'text-brand-400' : 'text-slate-500'}`}>Good</span>
+                </div>
+                <div className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${score > 40 && score <= 60 ? 'bg-indigo-500/10 border border-indigo-500/20' : 'bg-slate-800/30'}`}>
+                    <span className="text-[11px] text-slate-400">&gt; 40</span>
+                    <span className={`text-[11px] font-bold ${score > 40 && score <= 60 ? 'text-indigo-400' : 'text-slate-500'}`}>Average</span>
+                </div>
+                <div className={`flex items-center justify-between px-3 py-1.5 rounded-lg ${score <= 40 ? 'bg-rose-500/10 border border-rose-500/20' : 'bg-slate-800/30'}`}>
+                    <span className="text-[11px] text-slate-400">≤ 40</span>
+                    <span className={`text-[11px] font-bold ${score <= 40 ? 'text-rose-400' : 'text-slate-500'}`}>Needs Work</span>
+                </div>
+            </div>
+            
+            <p className="text-center text-[10px] text-slate-600 mt-3">Based on Win Rate & Profit Factor</p>
         </div>
     );
 };
@@ -108,12 +129,19 @@ const Dashboard = () => {
         startDate.setDate(now.getDate() - 30);
     }
 
+    const mainAccount = getMainAccount();
+    
     return trades
         .filter(t => new Date(t.date) >= startDate)
-        .filter(t => !selectedAccountId || t.accountId === selectedAccountId)
+        .filter(t => {
+          if (!selectedAccountId) return true;
+          // If trade has an accountId, match it; otherwise treat as main account
+          const tradeAccountId = t.accountId || mainAccount?.id;
+          return tradeAccountId === selectedAccountId;
+        })
         .filter(t => t.includeInAccount !== false)
         .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-  }, [trades, timeframe, selectedAccountId]);
+  }, [trades, timeframe, selectedAccountId, getMainAccount]);
 
   // Calculate Metrics
   const stats = useMemo(() => {

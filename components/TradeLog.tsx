@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
-import { ArrowRight, Trash2, Plus, Wallet, ChevronDown, ToggleLeft, ToggleRight } from 'lucide-react';
+import { ArrowRight, Trash2, Plus, Wallet, ChevronDown } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import TradeWizard from './TradeWizard';
 
@@ -107,7 +107,11 @@ const TradeLog = () => {
                </thead>
                <tbody className="divide-y divide-slate-800">
                    {filteredTrades.map((trade) => {
-                       const tradeAccount = accounts.find(a => a.id === trade.accountId);
+                       // Get main account as default if trade has no accountId
+                       const mainAccount = visibleAccounts.find(a => a.isMain);
+                       const tradeAccount = accounts.find(a => a.id === trade.accountId) || mainAccount;
+                       const effectiveAccountId = trade.accountId || mainAccount?.id;
+                       
                        // Calculate R:R for display (works for both wins and losses)
                        const hasRR = trade.riskAmount && trade.riskAmount > 0 && trade.tpAmount && trade.tpAmount > 0;
                        const rrValue = hasRR ? trade.tpAmount! / trade.riskAmount! : null;
@@ -167,7 +171,7 @@ const TradeLog = () => {
                                      onClick={() => setOpenAccountDropdownId(openAccountDropdownId === trade.id ? null : trade.id)}
                                      className="text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded flex items-center gap-1 transition-colors"
                                    >
-                                     <span>{tradeAccount?.name || 'Select'}</span>
+                                     <span>{tradeAccount?.name || mainAccount?.name || 'Select'}</span>
                                      <ChevronDown size={12} />
                                    </button>
                                    {openAccountDropdownId === trade.id && (
@@ -182,7 +186,7 @@ const TradeLog = () => {
                                                setOpenAccountDropdownId(null);
                                              }}
                                              className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors flex items-center justify-between ${
-                                               account.id === trade.accountId ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
+                                               account.id === effectiveAccountId ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
                                              }`}
                                            >
                                              <span>{account.name}</span>
