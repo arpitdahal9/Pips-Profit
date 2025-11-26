@@ -1,10 +1,27 @@
-import React, { createContext, useContext, useState, useEffect, PropsWithChildren } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, PropsWithChildren } from 'react';
 import { Trade, Strategy, Tag, TradingAccount } from '../types';
 import { MOCK_TRADES, MOCK_STRATEGIES, MOCK_TAGS } from '../constants';
 
 interface UserProfile {
   name: string;
   pin: string;
+  avatar?: string;
+}
+
+interface AppSettings {
+  autoExport: boolean;
+  lastExportDate?: string;
+}
+
+// Export data format
+interface ExportData {
+  version: string;
+  exportDate: string;
+  trades: Trade[];
+  accounts: TradingAccount[];
+  strategies: Strategy[];
+  tags: Tag[];
+  user?: { name: string; avatar?: string };
 }
 
 interface StoreContextType {
@@ -14,6 +31,8 @@ interface StoreContextType {
   strategies: Strategy[];
   tags: Tag[];
   accounts: TradingAccount[];
+  settings: AppSettings;
+  updateSettings: (updates: Partial<AppSettings>) => void;
   deleteTrade: (id: string) => void;
   addTrade: (trade: Trade) => void;
   updateTrade: (id: string, updates: Partial<Trade>) => void;
@@ -27,6 +46,8 @@ interface StoreContextType {
   setMainAccount: (id: string) => void;
   getMainAccount: () => TradingAccount | undefined;
   getAccountBalance: (accountId: string) => number;
+  exportData: () => void;
+  importData: (file: File) => Promise<{ success: boolean; message: string }>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -77,11 +98,25 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     }
   };
 
+  const loadSettings = (): AppSettings => {
+    try {
+      const stored = localStorage.getItem('velox_settings');
+      if (stored) {
+        return JSON.parse(stored);
+      }
+      return { autoExport: false };
+    } catch (e) {
+      console.error("Failed to parse settings from localStorage");
+      return { autoExport: false };
+    }
+  };
+
   const [user, setUser] = useState<UserProfile | null>(null);
   const [trades, setTrades] = useState<Trade[]>(loadTrades);
   const [strategies, setStrategies] = useState<Strategy[]>(loadStrategies);
   const [tags, setTags] = useState<Tag[]>(loadTags);
   const [accounts, setAccounts] = useState<TradingAccount[]>(loadAccounts);
+  const [settings, setSettings] = useState<AppSettings>(loadSettings);
 
   // Load user on mount
   useEffect(() => {
@@ -115,6 +150,15 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     localStorage.setItem('velox_accounts', JSON.stringify(accounts));
   }, [accounts]);
 
+  // Persist settings to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('velox_settings', JSON.stringify(settings));
+  }, [settings]);
+
+  const updateSettings = (updates: Partial<AppSettings>) => {
+    setSettings(prev => ({ ...prev, ...updates }));
+  };
+
   const updateUser = (updates: Partial<UserProfile>) => {
     setUser(prev => {
       if (!prev) return prev;
@@ -128,8 +172,91 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     setTrades(prev => prev.filter(t => t.id !== id));
   };
 
+  // Export function
+  const performExport = useCallback(() => {
+    const exportData: ExportData = {
+      version: '1.0',
+      exportDate: new Date().toISOString(),
+      trades,
+      accounts,
+      strategies,
+      tags,
+      user: user ? { name: user.name, avatar: user.avatar } : undefined
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pipsprofit-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Update last export date
+    setSettings(prev => ({ ...prev, lastExportDate: new Date().toISOString() }));
+  }, [trades, accounts, strategies, tags, user]);
+
+  const exportData = () => {
+    performExport();
+  };
+
+  const importData = async (file: File): Promise<{ success: boolean; message: string }> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          const data: ExportData = JSON.parse(content);
+
+          // Validate the data structure
+          if (!data.version || !data.trades) {
+            resolve({ success: false, message: 'Invalid backup file format' });
+            return;
+          }
+
+          // Import the data
+          if (data.trades && Array.isArray(data.trades)) {
+            setTrades(data.trades);
+          }
+          if (data.accounts && Array.isArray(data.accounts)) {
+            setAccounts(data.accounts);
+          }
+          if (data.strategies && Array.isArray(data.strategies)) {
+            setStrategies(data.strategies);
+          }
+          if (data.tags && Array.isArray(data.tags)) {
+            setTags(data.tags);
+          }
+          if (data.user) {
+            setUser(prev => prev ? { ...prev, name: data.user!.name, avatar: data.user!.avatar } : prev);
+          }
+
+          resolve({ 
+            success: true, 
+            message: `Imported ${data.trades.length} trades, ${data.accounts?.length || 0} accounts` 
+          });
+        } catch (err) {
+          resolve({ success: false, message: 'Failed to parse backup file' });
+        }
+      };
+      reader.onerror = () => {
+        resolve({ success: false, message: 'Failed to read file' });
+      };
+      reader.readAsText(file);
+    });
+  };
+
   const addTrade = (trade: Trade) => {
-    setTrades(prev => [trade, ...prev]);
+    setTrades(prev => {
+      const newTrades = [trade, ...prev];
+      // Auto-export if enabled
+      if (settings.autoExport) {
+        setTimeout(() => performExport(), 500);
+      }
+      return newTrades;
+    });
   };
 
   const updateTrade = (id: string, updates: Partial<Trade>) => {
@@ -209,6 +336,8 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       strategies, 
       tags,
       accounts,
+      settings,
+      updateSettings,
       deleteTrade, 
       addTrade,
       updateTrade,
@@ -221,7 +350,9 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       deleteAccount,
       setMainAccount,
       getMainAccount,
-      getAccountBalance
+      getAccountBalance,
+      exportData,
+      importData
     }}>
       {children}
     </StoreContext.Provider>

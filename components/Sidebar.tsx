@@ -120,7 +120,11 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed = false,
               className="flex items-center gap-3 w-full p-2 rounded-xl hover:bg-slate-800 transition-colors group"
             >
               <div className="relative">
-                <img src={`https://ui-avatars.com/api/?name=${user?.name || 'Trader'}&background=10b981&color=0f172a&bold=true`} alt="User" className="w-10 h-10 rounded-full border-2 border-slate-700 group-hover:border-brand-500 transition-colors" />
+                <img 
+                  src={user?.avatar || `https://ui-avatars.com/api/?name=${user?.name || 'Trader'}&background=10b981&color=0f172a&bold=true`} 
+                  alt="User" 
+                  className="w-10 h-10 rounded-full border-2 border-slate-700 group-hover:border-brand-500 transition-colors bg-slate-800" 
+                />
                 <div className="absolute bottom-0 right-0 w-3 h-3 bg-brand-500 border-2 border-slate-900 rounded-full"></div>
               </div>
               <div className="flex-1 min-w-0 text-left">

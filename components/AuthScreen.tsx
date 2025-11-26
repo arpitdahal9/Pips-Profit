@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Delete, ArrowRight, User, Lock } from 'lucide-react';
+import { Zap, Delete, ArrowRight, User, Lock, AlertTriangle, Trash2 } from 'lucide-react';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
@@ -14,6 +14,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   const [pin, setPin] = useState('');
   const [savedUser, setSavedUser] = useState<{name: string, pin: string} | null>(null);
   const [error, setError] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
 
   // Store the latest onAuthenticated callback in a ref to avoid dependency issues
   const onAuthenticatedRef = useRef(onAuthenticated);
@@ -46,6 +48,20 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
   const handleClear = () => {
     setPin('');
+  };
+
+  const handleResetApp = () => {
+    if (resetConfirmText === 'RESET') {
+      // Clear all localStorage
+      localStorage.removeItem('velox_user');
+      localStorage.removeItem('velox_trades');
+      localStorage.removeItem('velox_accounts');
+      localStorage.removeItem('velox_strategies');
+      localStorage.removeItem('velox_tags');
+      localStorage.removeItem('velox_settings');
+      // Reload the page
+      window.location.reload();
+    }
   };
 
   const handleNameSubmit = (e: React.FormEvent) => {
@@ -123,6 +139,17 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                 </button>
               </form>
             </div>
+            
+            {/* PIN Warning */}
+            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+              <div className="flex gap-2 items-start">
+                <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-amber-500/80">
+                  <span className="font-bold">Important:</span> This app works offline. If you forget your PIN, there is no recovery option. 
+                  Please remember your PIN or use the backup feature regularly.
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -196,10 +223,83 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
             </div>
 
             {view === 'register_pin' && (
-               <button onClick={() => setView('register_name')} className="mt-8 text-sm text-slate-500 hover:text-white transition-colors">
+              <>
+                <button onClick={() => setView('register_name')} className="mt-8 text-sm text-slate-500 hover:text-white transition-colors">
                   Back to Name
-               </button>
+                </button>
+                {/* PIN Warning */}
+                <div className="mt-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl max-w-xs">
+                  <div className="flex gap-2 items-start">
+                    <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                    <p className="text-[10px] text-amber-500/80">
+                      <span className="font-bold">Remember this PIN!</span> No recovery option if forgotten. Use backups regularly.
+                    </p>
+                  </div>
+                </div>
+              </>
             )}
+
+            {view === 'login' && (
+              <button 
+                onClick={() => setShowResetConfirm(true)} 
+                className="mt-8 text-xs text-slate-600 hover:text-rose-400 transition-colors"
+              >
+                Forgot PIN? Reset App
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Reset Confirmation Modal */}
+        {showResetConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
+              <div className="text-center mb-4">
+                <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Trash2 size={24} className="text-rose-500" />
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2">Reset Application?</h3>
+                <p className="text-sm text-slate-400">
+                  This will <span className="text-rose-400 font-bold">permanently delete</span> all your data including trades, accounts, and settings.
+                </p>
+              </div>
+
+              <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 mb-4">
+                <p className="text-xs text-rose-400 text-center">
+                  ⚠️ Make sure you've exported your trade logs before resetting!
+                </p>
+              </div>
+
+              <div className="mb-4">
+                <label className="text-xs text-slate-500 mb-2 block">Type <span className="font-mono font-bold text-white">RESET</span> to confirm:</label>
+                <input
+                  type="text"
+                  value={resetConfirmText}
+                  onChange={e => setResetConfirmText(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-center font-mono focus:border-rose-500 outline-none"
+                  placeholder="Type RESET"
+                />
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  onClick={handleResetApp}
+                  disabled={resetConfirmText !== 'RESET'}
+                  className="flex-1 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg transition-colors"
+                >
+                  Reset Everything
+                </button>
+                <button
+                  onClick={() => {
+                    setShowResetConfirm(false);
+                    setResetConfirmText('');
+                  }}
+                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         )}
 

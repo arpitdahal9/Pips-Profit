@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
-import { X, Plus, Trash2, Star, Building2, Wallet, Edit2, Check, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, Plus, Trash2, Star, Building2, Wallet, Edit2, Check, Eye, EyeOff, AlertCircle, Camera, Download, Upload, ToggleLeft, ToggleRight, Database, Clock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { TradingAccount } from '../types';
+
+// Avatar options - using different styles and seeds for variety
+const AVATAR_OPTIONS = [
+  { id: 'avatar1', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=10b981' },
+  { id: 'avatar2', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aneka&backgroundColor=6366f1' },
+  { id: 'avatar3', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Milo&backgroundColor=f59e0b' },
+  { id: 'avatar4', url: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Luna&backgroundColor=ec4899' },
+  { id: 'avatar5', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Trader1&backgroundColor=10b981' },
+  { id: 'avatar6', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Trader2&backgroundColor=6366f1' },
+  { id: 'avatar7', url: 'https://api.dicebear.com/7.x/bottts/svg?seed=Trader3&backgroundColor=f59e0b' },
+  { id: 'avatar8', url: 'https://api.dicebear.com/7.x/lorelei/svg?seed=TraderPro&backgroundColor=10b981' },
+  { id: 'avatar9', url: 'https://api.dicebear.com/7.x/lorelei/svg?seed=ChartMaster&backgroundColor=6366f1' },
+  { id: 'avatar10', url: 'https://api.dicebear.com/7.x/notionists/svg?seed=Pip&backgroundColor=10b981' },
+  { id: 'avatar11', url: 'https://api.dicebear.com/7.x/notionists/svg?seed=Profit&backgroundColor=ec4899' },
+  { id: 'avatar12', url: 'https://api.dicebear.com/7.x/personas/svg?seed=Bull&backgroundColor=10b981' },
+  { id: 'avatar13', url: 'https://api.dicebear.com/7.x/personas/svg?seed=Bear&backgroundColor=f43f5e' },
+  { id: 'avatar14', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Happy&backgroundColor=10b981' },
+  { id: 'avatar15', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Cool&backgroundColor=6366f1' },
+];
 
 interface AccountSettingsModalProps {
   isOpen: boolean;
@@ -9,8 +28,10 @@ interface AccountSettingsModalProps {
 }
 
 const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateUser, accounts, addAccount, updateAccount, deleteAccount, setMainAccount, getAccountBalance } = useStore();
-  const [activeTab, setActiveTab] = useState<'profile' | 'accounts'>('profile');
+  const { user, updateUser, accounts, addAccount, updateAccount, deleteAccount, setMainAccount, getAccountBalance, trades, settings, updateSettings, exportData, importData } = useStore();
+  const [activeTab, setActiveTab] = useState<'profile' | 'accounts' | 'backup'>('profile');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(user?.name || '');
   const [showAddAccount, setShowAddAccount] = useState(false);
@@ -18,6 +39,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', broker: '', startingBalance: '' });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   if (!isOpen) return null;
 
@@ -25,6 +47,30 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
     if (tempName.trim()) {
       updateUser({ name: tempName.trim() });
       setEditingName(false);
+    }
+  };
+
+  const handleSelectAvatar = (avatarUrl: string) => {
+    updateUser({ avatar: avatarUrl });
+    setShowAvatarPicker(false);
+  };
+
+  const getCurrentAvatar = () => {
+    if (user?.avatar) return user.avatar;
+    return `https://ui-avatars.com/api/?name=${user?.name || 'Trader'}&background=10b981&color=0f172a&bold=true&size=80`;
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImportStatus(null);
+    const result = await importData(file);
+    setImportStatus({ type: result.success ? 'success' : 'error', message: result.message });
+    
+    // Clear the input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
     }
   };
 
@@ -92,7 +138,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
         <div className="flex border-b border-slate-800">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'profile'
                 ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
                 : 'text-slate-400 hover:text-white'
@@ -102,13 +148,23 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
           </button>
           <button
             onClick={() => setActiveTab('accounts')}
-            className={`flex-1 px-6 py-3 text-sm font-medium transition-colors ${
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
               activeTab === 'accounts'
                 ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
                 : 'text-slate-400 hover:text-white'
             }`}
           >
-            Trading Accounts
+            Accounts
+          </button>
+          <button
+            onClick={() => setActiveTab('backup')}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
+              activeTab === 'backup'
+                ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            Backup
           </button>
         </div>
 
@@ -118,16 +174,67 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
             <div className="space-y-6">
               {/* Profile Picture */}
               <div className="flex items-center gap-4">
-                <img 
-                  src={`https://ui-avatars.com/api/?name=${user?.name || 'Trader'}&background=10b981&color=0f172a&bold=true&size=80`} 
-                  alt="User" 
-                  className="w-20 h-20 rounded-full border-4 border-slate-700" 
-                />
+                <button 
+                  onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                  className="relative group"
+                >
+                  <img 
+                    src={getCurrentAvatar()} 
+                    alt="User" 
+                    className="w-20 h-20 rounded-full border-4 border-slate-700 group-hover:border-brand-500 transition-colors" 
+                  />
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                    <Camera size={24} className="text-white" />
+                  </div>
+                </button>
                 <div>
                   <p className="text-sm text-slate-500">Profile Picture</p>
-                  <p className="text-xs text-slate-600">Auto-generated from your name</p>
+                  <p className="text-xs text-slate-600">Click to choose an avatar</p>
                 </div>
               </div>
+
+              {/* Avatar Picker */}
+              {showAvatarPicker && (
+                <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
+                  <div className="flex justify-between items-center mb-3">
+                    <h4 className="text-sm font-bold text-white">Choose Your Avatar</h4>
+                    <button 
+                      onClick={() => setShowAvatarPicker(false)}
+                      className="text-slate-500 hover:text-white transition-colors"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-5 gap-3">
+                    {AVATAR_OPTIONS.map((avatar) => (
+                      <button
+                        key={avatar.id}
+                        onClick={() => handleSelectAvatar(avatar.url)}
+                        className={`w-full aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-105 ${
+                          user?.avatar === avatar.url 
+                            ? 'border-brand-500 ring-2 ring-brand-500/30' 
+                            : 'border-slate-700 hover:border-slate-500'
+                        }`}
+                      >
+                        <img 
+                          src={avatar.url} 
+                          alt={avatar.id} 
+                          className="w-full h-full object-cover bg-slate-900"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => {
+                      updateUser({ avatar: undefined });
+                      setShowAvatarPicker(false);
+                    }}
+                    className="mt-3 w-full text-xs text-slate-500 hover:text-white py-2 transition-colors"
+                  >
+                    Reset to default (initials)
+                  </button>
+                </div>
+              )}
 
               {/* Name */}
               <div>
@@ -472,6 +579,135 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                   </button>
                 )
               )}
+            </div>
+          )}
+
+          {/* Backup Tab */}
+          {activeTab === 'backup' && (
+            <div className="space-y-6">
+              {/* Hidden file input */}
+              <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleImportFile}
+                accept=".json"
+                className="hidden"
+              />
+
+              {/* Data Overview */}
+              <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700">
+                <div className="flex items-center gap-3 mb-4">
+                  <Database size={20} className="text-brand-400" />
+                  <h3 className="font-bold text-white">Your Data</h3>
+                </div>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div>
+                    <p className="text-2xl font-bold text-white">{trades.length}</p>
+                    <p className="text-xs text-slate-500">Trades</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{accounts.length}</p>
+                    <p className="text-xs text-slate-500">Accounts</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">
+                      {settings.lastExportDate 
+                        ? new Date(settings.lastExportDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+                        : 'Never'
+                      }
+                    </p>
+                    <p className="text-xs text-slate-500">Last Backup</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Export Section */}
+              <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <Download size={20} className="text-emerald-400" />
+                    <div>
+                      <h3 className="font-bold text-white">Export Backup</h3>
+                      <p className="text-xs text-slate-500">Download all your data as a JSON file</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={exportData}
+                  className="w-full mt-2 px-4 py-3 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 rounded-lg font-medium hover:bg-emerald-500/30 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Download size={18} />
+                  Download Backup File
+                </button>
+              </div>
+
+              {/* Import Section */}
+              <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-3">
+                    <Upload size={20} className="text-indigo-400" />
+                    <div>
+                      <h3 className="font-bold text-white">Import Backup</h3>
+                      <p className="text-xs text-slate-500">Restore data from a backup file</p>
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full mt-2 px-4 py-3 bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 rounded-lg font-medium hover:bg-indigo-500/30 transition-colors flex items-center justify-center gap-2"
+                >
+                  <Upload size={18} />
+                  Select Backup File
+                </button>
+                {importStatus && (
+                  <div className={`mt-3 p-3 rounded-lg text-sm ${
+                    importStatus.type === 'success' 
+                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                      : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                  }`}>
+                    {importStatus.message}
+                  </div>
+                )}
+              </div>
+
+              {/* Auto Export */}
+              <div className="p-4 bg-slate-800/30 rounded-xl border border-slate-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Clock size={20} className="text-amber-400" />
+                    <div>
+                      <h3 className="font-bold text-white">Auto Backup</h3>
+                      <p className="text-xs text-slate-500">Automatically download backup when adding new trades</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => updateSettings({ autoExport: !settings.autoExport })}
+                    className="text-slate-400 hover:text-white transition-colors"
+                  >
+                    {settings.autoExport ? (
+                      <ToggleRight size={32} className="text-brand-500" />
+                    ) : (
+                      <ToggleLeft size={32} className="text-slate-600" />
+                    )}
+                  </button>
+                </div>
+                {settings.autoExport && (
+                  <p className="mt-3 text-xs text-amber-400/70 bg-amber-500/10 p-2 rounded-lg">
+                    ✓ A backup file will be downloaded each time you add a new trade
+                  </p>
+                )}
+              </div>
+
+              {/* Warning */}
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <div className="flex gap-2 items-start">
+                  <AlertCircle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-amber-500/80">
+                    <span className="font-bold">Important:</span> Keep your backup files safe. If you forget your PIN 
+                    and need to reset the app, you can restore your data from a backup.
+                  </p>
+                </div>
+              </div>
             </div>
           )}
         </div>
