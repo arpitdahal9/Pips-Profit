@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import TrackingView from './components/TrackingView';
 import TradeLog from './components/TradeLog';
 import StrategyView from './components/StrategyView';
+import CalendarPage from './components/CalendarPage';
 import AuthScreen from './components/AuthScreen';
 import AccountSettingsModal from './components/AccountSettingsModal';
 import { StoreProvider } from './context/StoreContext';
@@ -37,7 +38,10 @@ const App = () => {
   return (
     <StoreProvider>
       <HashRouter>
-        <div className="flex h-screen bg-slate-950 text-slate-200 font-sans antialiased overflow-hidden selection:bg-brand-500/30 selection:text-brand-200">
+        <div
+          className="flex w-full h-full min-h-screen bg-slate-950 text-slate-200 font-sans antialiased overflow-hidden selection:bg-brand-500/30 selection:text-brand-200"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom) * 0.5)' }}
+        >
           <AccountSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
           <Sidebar 
             isOpen={isSidebarOpen} 
@@ -49,19 +53,29 @@ const App = () => {
           
           <main className="flex-1 flex flex-col min-w-0 bg-slate-950 relative">
             {/* Mobile Header */}
-            <div className="md:hidden h-16 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0 z-30">
-                <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center text-slate-900 shadow-lg shadow-brand-500/20">
-                        <Zap size={18} fill="currentColor" />
-                    </div>
-                    <span className="font-bold text-white tracking-tight">Pips&<span className="text-brand-500">Profit</span></span>
+            <div
+              className="md:hidden sticky top-0 left-0 right-0 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-4 shrink-0 z-30"
+              style={{
+                paddingTop: 'calc(env(safe-area-inset-top, 0px) + 8px)',
+                paddingBottom: '12px',
+              }}
+            >
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="text-slate-400 hover:text-white p-2 -ml-2 rounded-lg active:bg-slate-800 transition-colors"
+                aria-label="Open navigation"
+              >
+                <Menu size={24} />
+              </button>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-brand-400 to-brand-600 rounded-lg flex items-center justify-center text-slate-900 shadow-lg shadow-brand-500/20">
+                  <Zap size={18} fill="currentColor" />
                 </div>
-                <button 
-                    onClick={() => setIsSidebarOpen(true)} 
-                    className="text-slate-400 hover:text-white p-2 rounded-lg active:bg-slate-800 transition-colors"
-                >
-                    <Menu size={24} />
-                </button>
+                <span className="font-bold text-white tracking-tight">
+                  Pips&<span className="text-brand-500">Profit</span>
+                </span>
+              </div>
+              <div className="w-10" aria-hidden="true" />
             </div>
 
             {/* Content Area */}
@@ -70,6 +84,7 @@ const App = () => {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tracking" element={<TrackingView />} />
                 <Route path="/trades" element={<TradeLog />} />
+                <Route path="/calendar" element={<CalendarPage />} />
                 <Route path="/strategies" element={<StrategyView />} />
                 {/* Redirects */}
                 <Route path="*" element={<Navigate to="/" replace />} />

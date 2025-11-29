@@ -11,6 +11,7 @@ interface UserProfile {
 interface AppSettings {
   autoExport: boolean;
   lastExportDate?: string;
+  defaultTradeInputMode?: 'interactive' | 'form';
 }
 
 // Export data format
@@ -172,9 +173,9 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     setTrades(prev => prev.filter(t => t.id !== id));
   };
 
-  // Export function
-  const performExport = useCallback(() => {
-    const exportData: ExportData = {
+  // Export function - works on both web and native (Android/iOS)
+  const performExport = useCallback(async () => {
+    const backupData: ExportData = {
       version: '1.0',
       exportDate: new Date().toISOString(),
       trades,
@@ -184,11 +185,56 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       user: user ? { name: user.name, avatar: user.avatar } : undefined
     };
 
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const jsonString = JSON.stringify(backupData, null, 2);
+    const fileName = `pipsprofit-backup-${new Date().toISOString().split('T')[0]}.json`;
+
+    // Check if running on native platform (Capacitor)
+    const isNative = typeof (window as any).Capacitor !== 'undefined' && 
+                     (window as any).Capacitor.isNativePlatform && 
+                     (window as any).Capacitor.isNativePlatform();
+
+    if (isNative) {
+      try {
+        // Use Capacitor Filesystem and Share plugins for native
+        const { Filesystem, Directory } = await import('@capacitor/filesystem');
+        const { Share } = await import('@capacitor/share');
+
+        // Write file to cache directory
+        const result = await Filesystem.writeFile({
+          path: fileName,
+          data: jsonString,
+          directory: Directory.Cache,
+          encoding: 'utf8' as any
+        });
+
+        // Share the file so user can save it wherever they want
+        await Share.share({
+          title: 'PipsProfit Backup',
+          text: 'Your trading journal backup',
+          url: result.uri,
+          dialogTitle: 'Save your backup file'
+        });
+
+        // Update last export date
+        setSettings(prev => ({ ...prev, lastExportDate: new Date().toISOString() }));
+      } catch (error) {
+        console.error('Native export failed:', error);
+        // Fallback to web method if native fails
+        downloadViaWeb(jsonString, fileName);
+      }
+    } else {
+      // Web browser - use standard download
+      downloadViaWeb(jsonString, fileName);
+    }
+  }, [trades, accounts, strategies, tags, user]);
+
+  // Helper function for web download
+  const downloadViaWeb = (content: string, fileName: string) => {
+    const blob = new Blob([content], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `pipsprofit-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.download = fileName;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -196,7 +242,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
 
     // Update last export date
     setSettings(prev => ({ ...prev, lastExportDate: new Date().toISOString() }));
-  }, [trades, accounts, strategies, tags, user]);
+  };
 
   const exportData = () => {
     performExport();

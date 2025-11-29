@@ -9,7 +9,10 @@ import {
   MapPin,
   ChevronDown,
   Target,
-  Plus
+  Plus,
+  Edit3,
+  Save,
+  XCircle
 } from 'lucide-react';
 import TradingViewWidget from './TradingViewWidget';
 import RichTextEditor from './RichTextEditor';
@@ -129,6 +132,14 @@ const TrackingView = () => {
   const { trades, strategies, updateTrade } = useStore();
   const [selectedTradeId, setSelectedTradeId] = useState<string | null>(null);
   const [isStrategyOpen, setIsStrategyOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    entryPrice: '',
+    exitPrice: '',
+    lots: '',
+    pnl: '',
+    pips: ''
+  });
 
   // Get the active trade from the selected ID, or default to the most recent trade
   const activeTrade = useMemo(() => {
@@ -173,10 +184,53 @@ const TrackingView = () => {
     updateTrade(activeTrade.id, { tags: newTags });
   };
 
+  // Start editing - populate form with current values
+  const handleStartEdit = () => {
+    if (!activeTrade) return;
+    setEditForm({
+      entryPrice: activeTrade.entryPrice?.toString() || '0',
+      exitPrice: activeTrade.exitPrice?.toString() || '0',
+      lots: activeTrade.lots?.toString() || '0',
+      pnl: activeTrade.pnl?.toString() || '0',
+      pips: activeTrade.pips?.toString() || '0'
+    });
+    setIsEditing(true);
+  };
+
+  // Cancel editing
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditForm({
+      entryPrice: '',
+      exitPrice: '',
+      lots: '',
+      pnl: '',
+      pips: ''
+    });
+  };
+
+  // Save edits
+  const handleSaveEdit = () => {
+    if (!activeTrade) return;
+    
+    const pnl = parseFloat(editForm.pnl) || 0;
+    
+    updateTrade(activeTrade.id, {
+      entryPrice: parseFloat(editForm.entryPrice) || 0,
+      exitPrice: parseFloat(editForm.exitPrice) || 0,
+      lots: parseFloat(editForm.lots) || 0,
+      pnl: pnl,
+      pips: parseFloat(editForm.pips) || 0,
+      status: pnl >= 0 ? TradeStatus.WIN : TradeStatus.LOSS
+    });
+    
+    setIsEditing(false);
+  };
+
   // Show empty state if no trades
   if (!activeTrade || trades.length === 0) {
     return (
-      <div className="flex-1 h-full overflow-y-auto p-8 custom-scrollbar bg-slate-950 flex items-center justify-center">
+      <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-500 mb-4 text-lg">Live Terminal only active after a trade input</p>
           <p className="text-slate-600 text-sm">Create a trade in the Trade Journal to view it here.</p>
@@ -186,9 +240,9 @@ const TrackingView = () => {
   }
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-950 text-slate-200">
+    <div className="flex h-full w-full flex-col lg:flex-row overflow-x-hidden overflow-y-auto lg:overflow-y-hidden bg-slate-950 text-slate-200">
       {/* Left Panel: Trade Details */}
-      <div className="w-[380px] flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col h-full shadow-2xl z-10">
+      <div className="w-full lg:w-[380px] flex-shrink-0 bg-slate-900 border-slate-800 border-b lg:border-b-0 lg:border-r flex flex-col lg:h-full shadow-2xl z-10">
         
         {/* Trade Selector */}
         {trades.length > 1 && (
@@ -226,22 +280,68 @@ const TrackingView = () => {
                     </div>
                 </div>
                 <div className="flex gap-1">
+                    {!isEditing ? (
+                      <button 
+                        onClick={handleStartEdit}
+                        className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-brand-400 transition-colors"
+                        title="Edit Trade"
+                      >
+                        <Edit3 size={16} />
+                      </button>
+                    ) : (
+                      <>
+                        <button 
+                          onClick={handleSaveEdit}
+                          className="p-2 hover:bg-emerald-500/20 rounded-lg text-emerald-400 transition-colors"
+                          title="Save Changes"
+                        >
+                          <Save size={16} />
+                        </button>
+                        <button 
+                          onClick={handleCancelEdit}
+                          className="p-2 hover:bg-rose-500/20 rounded-lg text-rose-400 transition-colors"
+                          title="Cancel"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </>
+                    )}
                     <button className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 transition-colors"><Share2 size={16} /></button>
                 </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3 mt-4">
-                 <div className={`p-3 rounded-xl border ${activeTrade.pnl >= 0 ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
+                 <div className={`p-3 rounded-xl border ${(isEditing ? parseFloat(editForm.pnl) : activeTrade.pnl) >= 0 ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-rose-500/5 border-rose-500/20'}`}>
                     <span className="text-xs text-slate-500 block mb-1">Net P&L</span>
-                    <span className={`text-xl font-mono font-bold ${activeTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                         {activeTrade.pnl >= 0 ? '+' : ''}${Math.abs(activeTrade.pnl).toFixed(2)}
-                    </span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editForm.pnl}
+                        onChange={(e) => setEditForm({ ...editForm, pnl: e.target.value })}
+                        className={`w-full text-xl font-mono font-bold bg-transparent border-b border-dashed outline-none ${parseFloat(editForm.pnl) >= 0 ? 'text-emerald-400 border-emerald-400/50' : 'text-rose-400 border-rose-400/50'}`}
+                      />
+                    ) : (
+                      <span className={`text-xl font-mono font-bold ${activeTrade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                           {activeTrade.pnl >= 0 ? '+' : ''}${Math.abs(activeTrade.pnl).toFixed(2)}
+                      </span>
+                    )}
                  </div>
                  <div className="p-3 rounded-xl border border-slate-700 bg-slate-800/50">
                     <span className="text-xs text-slate-500 block mb-1">Pips</span>
-                    <span className={`text-xl font-mono font-bold ${activeTrade.pips >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                         {activeTrade.pips >= 0 ? '+' : ''}{activeTrade.pips}
-                    </span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editForm.pips}
+                        onChange={(e) => setEditForm({ ...editForm, pips: e.target.value })}
+                        className={`w-full text-xl font-mono font-bold bg-transparent border-b border-dashed border-slate-500 outline-none ${parseFloat(editForm.pips) >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}
+                      />
+                    ) : (
+                      <span className={`text-xl font-mono font-bold ${activeTrade.pips >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                           {activeTrade.pips >= 0 ? '+' : ''}{activeTrade.pips}
+                      </span>
+                    )}
                  </div>
             </div>
         </div>
@@ -253,19 +353,51 @@ const TrackingView = () => {
             <div className="grid grid-cols-2 gap-x-4 gap-y-4 text-sm bg-slate-800/30 p-4 rounded-xl border border-slate-800">
                 <div>
                     <span className="text-xs text-slate-500 block mb-1">Entry Price</span>
-                    <span className="font-mono text-white">{activeTrade.entryPrice.toFixed(2)}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editForm.entryPrice}
+                        onChange={(e) => setEditForm({ ...editForm, entryPrice: e.target.value })}
+                        className="w-full font-mono text-white bg-slate-900 border border-slate-600 rounded px-2 py-1 outline-none focus:border-brand-500"
+                      />
+                    ) : (
+                      <span className="font-mono text-white">{(activeTrade.entryPrice || 0).toFixed(5)}</span>
+                    )}
                 </div>
                 <div>
                     <span className="text-xs text-slate-500 block mb-1">Exit Price</span>
-                    <span className="font-mono text-white">{activeTrade.exitPrice.toFixed(2)}</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editForm.exitPrice}
+                        onChange={(e) => setEditForm({ ...editForm, exitPrice: e.target.value })}
+                        className="w-full font-mono text-white bg-slate-900 border border-slate-600 rounded px-2 py-1 outline-none focus:border-brand-500"
+                      />
+                    ) : (
+                      <span className="font-mono text-white">{(activeTrade.exitPrice || 0).toFixed(5)}</span>
+                    )}
                 </div>
                 <div>
                     <span className="text-xs text-slate-500 block mb-1">Lot Size</span>
-                    <span className="font-mono text-white">{activeTrade.lots.toFixed(2)} Lots</span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={editForm.lots}
+                        onChange={(e) => setEditForm({ ...editForm, lots: e.target.value })}
+                        className="w-full font-mono text-white bg-slate-900 border border-slate-600 rounded px-2 py-1 outline-none focus:border-brand-500"
+                      />
+                    ) : (
+                      <span className="font-mono text-white">{(activeTrade.lots || 0).toFixed(2)} Lots</span>
+                    )}
                 </div>
                 <div>
                     <span className="text-xs text-slate-500 block mb-1">R:R Achieved</span>
-                    <span className="font-mono text-white">1:2.4</span>
+                    <span className="font-mono text-white">
+                      {activeTrade.riskRewardRatio ? `1:${activeTrade.riskRewardRatio}` : '—'}
+                    </span>
                 </div>
             </div>
 
@@ -357,7 +489,7 @@ const TrackingView = () => {
       </div>
 
       {/* Right Panel: Chart & Notes */}
-      <div className="flex-1 flex flex-col min-w-0 bg-slate-950">
+      <div className="flex-1 flex flex-col min-w-0 bg-slate-950 w-full">
         
         {/* Toolbar */}
         <div className="h-12 bg-slate-900 border-b border-slate-800 flex items-center px-4 justify-between shrink-0">
@@ -373,12 +505,12 @@ const TrackingView = () => {
         </div>
 
         {/* Chart Area */}
-        <div className="h-[60%] w-full bg-slate-900 relative border-b border-slate-800">
+        <div className="w-full bg-slate-900 relative border-b border-slate-800 h-[320px] lg:h-[60%]">
              <TradingViewWidget symbol={activeTrade.tradingViewSymbol} theme="dark" />
         </div>
 
         {/* Notes Area */}
-        <div className="flex-1 overflow-hidden flex flex-col p-6 bg-slate-950">
+        <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-6 bg-slate-950 pb-6">
              <div className="flex items-center justify-between mb-4">
                  <h3 className="font-semibold text-white flex items-center gap-2">
                     <TrendingUp size={16} className="text-brand-500"/>

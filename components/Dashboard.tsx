@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, PieChart, Pie } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Activity, BarChart3, TrendingUp, Wallet, ChevronDown, Target, Brain, Clock, Newspaper, AlertTriangle, Zap } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Activity, BarChart3, TrendingUp, Wallet, ChevronDown, Target, Brain, Clock, Newspaper, AlertTriangle, Zap, Plus } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import TradeWizard from './TradeWizard';
+import AccountSettingsModal from './AccountSettingsModal';
 import { TradingSession } from '../types';
 
 const StatCard = ({ title, value, sub, isPositive, icon: Icon }: any) => (
@@ -95,6 +96,7 @@ const Dashboard = () => {
   const { trades, user, accounts, getAccountBalance, getMainAccount } = useStore();
   const [timeframe, setTimeframe] = useState<'7D' | '30D' | 'ALL'>('7D');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
 
@@ -389,9 +391,10 @@ const Dashboard = () => {
   const finalChartData = chartData.length > 0 ? chartData : [{name: 'No Data', val: 0}];
 
   return (
-    <div className="flex-1 h-full overflow-y-auto p-8 custom-scrollbar bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
+    <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black">
       
       <TradeWizard isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <AccountSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
 
       {/* Account Balance Bar */}
       {visibleAccounts.length > 0 ? (
@@ -443,30 +446,37 @@ const Dashboard = () => {
           </div>
         </div>
       ) : (
-        <div className="mb-6 p-6 glass-panel rounded-xl border border-dashed border-slate-700 text-center">
-          <Wallet size={32} className="mx-auto text-slate-600 mb-2" />
-          <p className="text-slate-400 mb-1">No trading accounts configured</p>
-          <p className="text-xs text-slate-600">Click your profile in the sidebar to add a trading account</p>
-        </div>
+        <button 
+          onClick={() => setIsSettingsOpen(true)}
+          className="mb-6 p-6 glass-panel rounded-xl border border-dashed border-slate-700 text-center w-full hover:border-brand-500/50 hover:bg-brand-500/5 transition-all cursor-pointer group"
+        >
+          <Wallet size={32} className="mx-auto text-slate-600 mb-2 group-hover:text-brand-400 transition-colors" />
+          <p className="text-slate-400 mb-1 group-hover:text-white transition-colors">No trading accounts configured</p>
+          <p className="text-xs text-slate-600 group-hover:text-slate-400 transition-colors">Tap here to add your first trading account</p>
+          <div className="mt-3 inline-flex items-center gap-1 text-xs text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Plus size={14} />
+            Add Account
+          </div>
+        </button>
       )}
 
       {/* Header Actions */}
-      <div className="flex justify-between items-end mb-10">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-end gap-4 mb-6 sm:mb-10">
         <div>
-          <h1 className="text-3xl font-bold text-white tracking-tight">Command Center</h1>
-          <p className="text-slate-400 text-sm mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold text-white tracking-tight">Command Center</h1>
+          <p className="text-slate-400 text-xs sm:text-sm mt-1">
              {filteredTrades.length === 0 
                 ? "No trades for this account yet. Start logging your execution." 
                 : `Welcome back, ${user?.name || 'Trader'}. Viewing ${selectedAccount?.name || 'account'} stats.`}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2 sm:gap-3">
              <div className="flex bg-slate-900 rounded-lg border border-slate-800 p-1 shadow-lg">
                  {(['7D', '30D', 'ALL'] as const).map(tf => (
                     <button 
                         key={tf}
                         onClick={() => setTimeframe(tf)}
-                        className={`px-4 py-2 text-xs font-bold rounded transition-colors ${timeframe === tf ? 'bg-brand-500 text-slate-900 shadow shadow-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                        className={`px-3 sm:px-4 py-2 text-xs font-bold rounded transition-colors ${timeframe === tf ? 'bg-brand-500 text-slate-900 shadow shadow-brand-500/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                     >
                         {tf}
                     </button>
@@ -474,7 +484,7 @@ const Dashboard = () => {
              </div>
              <button 
                  onClick={() => setIsModalOpen(true)}
-                 className="bg-white text-slate-900 hover:bg-slate-200 px-5 py-2 rounded-lg text-sm font-bold shadow-lg shadow-white/5 transition-all flex items-center gap-2"
+                 className="bg-white text-slate-900 hover:bg-slate-200 px-4 sm:px-5 py-2 rounded-lg text-sm font-bold shadow-lg shadow-white/5 transition-all flex items-center gap-2"
              >
                  New Trade
              </button>

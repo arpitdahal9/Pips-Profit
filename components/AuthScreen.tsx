@@ -224,8 +224,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
             {view === 'register_pin' && (
               <>
-                <button onClick={() => setView('register_name')} className="mt-8 text-sm text-slate-500 hover:text-white transition-colors">
-                  Back to Name
+                <button onClick={() => setView('register_preference')} className="mt-8 text-sm text-slate-500 hover:text-white transition-colors">
+                  Back to Preferences
                 </button>
                 {/* PIN Warning */}
                 <div className="mt-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl max-w-xs">

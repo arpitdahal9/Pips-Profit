@@ -282,7 +282,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
               </div>
 
               {/* Account Summary */}
-              <div className="mt-8 p-4 bg-slate-800/30 rounded-xl border border-slate-800">
+              <div className="mt-6 p-4 bg-slate-800/30 rounded-xl border border-slate-800">
                 <h3 className="text-sm font-bold text-slate-400 uppercase mb-3">Quick Stats</h3>
                 <div className="grid grid-cols-2 gap-4">
                   <div>

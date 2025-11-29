@@ -8,7 +8,8 @@ import {
   ListChecks,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Calendar
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
@@ -57,12 +58,18 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed = false,
         onClick={onClose}
       />
 
-      <aside className={`
+      <aside
+        className={`
         fixed md:relative top-0 left-0 h-full
         ${isCollapsed ? 'w-16' : 'w-64'} bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 z-40 shadow-2xl
         transition-all duration-300 ease-in-out
         ${isOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
-      `}>
+      `}
+        style={{
+          paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
+          paddingBottom: 'max(12px, env(safe-area-inset-bottom, 12px))',
+        }}
+      >
         {/* Brand */}
         <div className={`p-6 ${isCollapsed ? 'pb-6' : 'pb-8'} flex justify-between items-center ${isCollapsed ? 'flex-col gap-2' : ''}`}>
           <div className={`flex items-center ${isCollapsed ? 'flex-col' : 'gap-3'}`}>
@@ -100,6 +107,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed = false,
               <div className="space-y-1">
                   <NavItem to="/" icon={LayoutDashboard} label="Dashboard" />
                   <NavItem to="/trades" icon={BookOpen} label="Trade Journal" />
+                  <NavItem to="/calendar" icon={Calendar} label="Calendar" />
                   <NavItem to="/tracking" icon={Activity} label="Live Terminal" />
               </div>
           </div>
