@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">PipsProfit</string>
-    <string name="title_activity_main">PipsProfit</string>
+    <string name="app_name">Day Trading Journal</string>
+    <string name="title_activity_main">Day Trading Journal</string>
     <string name="package_name">com.pipsprofit.app</string>
     <string name="custom_url_scheme">com.pipsprofit.app</string>
 </resources>

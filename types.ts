@@ -5,7 +5,7 @@ export enum TradeStatus {
   BE = 'BE' // Break Even
 }
 
-export type TradingSession = 'London' | 'New York' | 'Asian' | 'Overlap';
+export type TradingSession = 'Asian Open' | 'Asian' | 'Pre London' | 'London Open' | 'London' | 'London NY Overlap' | 'NY Open' | 'NY Session' | 'NY Close';
 
 export interface Tag {
   id: string;
@@ -33,6 +33,7 @@ export interface Trade {
   tradingViewSymbol?: string; // OANDA:XAUUSD
   date: string;
   time: string;
+  tradeTime?: string; // ISO string for actual trade execution time (date + time)
   session: TradingSession;
   side: 'LONG' | 'SHORT';
   status: TradeStatus;
@@ -57,10 +58,12 @@ export interface Trade {
   overTraded?: boolean;
   emotion?: string;
   mistakes?: string[]; // Array of mistake descriptions
-  photo?: string; // Base64 or URL
+  photo?: string; // Base64 or URL (deprecated, use photos array)
+  photos?: string[]; // Array of Base64 or URLs for multiple screenshots
   // Account linking
   accountId?: string; // Which account this trade belongs to
   includeInAccount?: boolean; // Whether to include in account balance calculations
+  commission?: number; // Commission amount (always negative, deducted from P&L)
   // Risk:Reward (only set for winning trades)
   riskRewardRatio?: number; // e.g., 2 means 1:2 R:R
 }
@@ -79,6 +82,7 @@ export interface TradingAccount {
   name: string;
   broker?: string;
   startingBalance: number;
+  commissionPerLot?: number; // Optional commission per lot
   isMain: boolean;
   isHidden: boolean;
   createdAt: string;

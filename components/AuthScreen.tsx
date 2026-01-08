@@ -1,311 +1,277 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Zap, Delete, ArrowRight, User, Lock, AlertTriangle, Trash2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Zap, ArrowRight, Lock, Delete, User, AlertTriangle } from 'lucide-react';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
-  // Flow state: 'loading' -> check LS -> 'register_name' | 'register_pin' | 'login'
-  const [view, setView] = useState<'loading' | 'register_name' | 'register_pin' | 'login'>('loading');
-  
-  // Data state
+  const [view, setView] = useState<'register_name' | 'register_pin' | 'login'>('register_name');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
-  const [savedUser, setSavedUser] = useState<{name: string, pin: string} | null>(null);
-  const [error, setError] = useState(false);
+  const [confirmPin, setConfirmPin] = useState('');
+  const [error, setError] = useState('');
+  const [storedUser, setStoredUser] = useState<{ name: string; pin: string } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [resetConfirmText, setResetConfirmText] = useState('');
-
-  // Store the latest onAuthenticated callback in a ref to avoid dependency issues
-  const onAuthenticatedRef = useRef(onAuthenticated);
-  useEffect(() => {
-    onAuthenticatedRef.current = onAuthenticated;
-  }, [onAuthenticated]);
 
   useEffect(() => {
-    const stored = localStorage.getItem('velox_user');
-    if (stored) {
-      const user = JSON.parse(stored);
-      setSavedUser(user);
-      setName(user.name); // Set name for display
+    const userData = localStorage.getItem('velox_user');
+    if (userData) {
+      setStoredUser(JSON.parse(userData));
       setView('login');
-    } else {
-      setView('register_name');
     }
   }, []);
 
-  const handleNumberClick = (num: string) => {
-    if (pin.length < 6) {
-      setPin(prev => prev + num);
-      setError(false);
+  const handlePinInput = (digit: string) => {
+    setError('');
+    if (view === 'register_pin') {
+      if (pin.length < 6) setPin(pin + digit);
+      else if (confirmPin.length < 6) setConfirmPin(confirmPin + digit);
+    } else {
+      if (pin.length < 6) setPin(pin + digit);
     }
   };
 
   const handleDelete = () => {
-    setPin(prev => prev.slice(0, -1));
+    if (view === 'register_pin') {
+      if (confirmPin.length > 0) setConfirmPin(confirmPin.slice(0, -1));
+      else if (pin.length > 0) setPin(pin.slice(0, -1));
+    } else {
+      setPin(pin.slice(0, -1));
+    }
   };
 
   const handleClear = () => {
     setPin('');
+    setConfirmPin('');
+    setError('');
   };
 
-  const handleResetApp = () => {
-    if (resetConfirmText === 'RESET') {
-      // Clear all localStorage
-      localStorage.removeItem('velox_user');
-      localStorage.removeItem('velox_trades');
-      localStorage.removeItem('velox_accounts');
-      localStorage.removeItem('velox_strategies');
-      localStorage.removeItem('velox_tags');
-      localStorage.removeItem('velox_settings');
-      // Reload the page
-      window.location.reload();
-    }
+  const handleResetPin = () => {
+    // Clear all app data
+    localStorage.removeItem('velox_user');
+    localStorage.removeItem('velox_trades');
+    localStorage.removeItem('velox_accounts');
+    localStorage.removeItem('pips_theme');
+    localStorage.removeItem('pips_learn_progress');
+    // Reset state
+    setStoredUser(null);
+    setShowResetConfirm(false);
+    setPin('');
+    setName('');
+    setView('register_name');
   };
 
-  const handleNameSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (name.trim().length > 0) {
-      setView('register_pin');
-    }
-  };
-
-  // Effect to check PIN completion
   useEffect(() => {
-    if (pin.length === 6) {
-      if (view === 'register_pin') {
-        // Save new user
-        const newUser = { name, pin };
-        localStorage.setItem('velox_user', JSON.stringify(newUser));
-        setTimeout(() => onAuthenticatedRef.current(), 300);
-      } else if (view === 'login') {
-        // Validate existing user
-        if (savedUser && pin === savedUser.pin) {
-          onAuthenticatedRef.current();
-        } else {
-          setError(true);
-          setTimeout(() => setPin(''), 500);
-        }
+    if (view === 'register_pin' && pin.length === 6 && confirmPin.length === 6) {
+      if (pin === confirmPin) {
+        const userData = { name, pin, createdAt: new Date().toISOString() };
+        localStorage.setItem('velox_user', JSON.stringify(userData));
+        onAuthenticated();
+      } else {
+        setError('PINs do not match');
+        setConfirmPin('');
       }
     }
-  }, [pin, view, name, savedUser]);
+  }, [confirmPin, pin, view, name, onAuthenticated]);
 
-  if (view === 'loading') return <div className="h-screen w-full bg-[#0f172a]"></div>;
+  useEffect(() => {
+    if (view === 'login' && pin.length === 6 && storedUser) {
+      if (pin === storedUser.pin) {
+        onAuthenticated();
+      } else {
+        setError('Incorrect PIN');
+        setPin('');
+      }
+    }
+  }, [pin, view, storedUser, onAuthenticated]);
+
+  const renderPinDots = (currentPin: string, total: number = 6) => (
+    <div className="flex justify-center gap-3 my-8">
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          className={`w-3 h-3 rounded-full transition-all duration-200 ${i < currentPin.length
+            ? 'bg-[#8b5cf6] shadow-[0_0_10px_#8b5cf6]'
+            : 'bg-slate-700'
+            }`}
+        />
+      ))}
+    </div>
+  );
+
+  const renderNumpad = () => (
+    <div className="grid grid-cols-3 gap-4 max-w-[280px] mx-auto">
+      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+        <button
+          key={num}
+          onClick={() => handlePinInput(num.toString())}
+          className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all"
+        >
+          {num}
+        </button>
+      ))}
+      <button
+        onClick={handleClear}
+        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 text-xs font-medium text-slate-500 hover:text-[#f472b6] hover:border-[#f472b6]/30 active:scale-95 transition-all"
+      >
+        CLR
+      </button>
+      <button
+        onClick={() => handlePinInput('0')}
+        className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all"
+      >
+        0
+      </button>
+      <button
+        onClick={handleDelete}
+        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 flex items-center justify-center text-slate-500 hover:text-white hover:border-slate-600 active:scale-95 transition-all"
+      >
+        <Delete size={24} />
+      </button>
+    </div>
+  );
 
   return (
-    <div className="h-screen w-full bg-[#0f172a] flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      
-      {/* Background Ambient Effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-brand-500/10 rounded-full blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none"></div>
+    <div
+      className="min-h-screen w-full gradient-animated flex flex-col items-center justify-center p-4 relative overflow-hidden"
+      style={{ paddingTop: 'env(safe-area-inset-top, 20px)' }}
+    >
+      {/* Ambient Effects */}
+      <div className="absolute top-[-30%] left-[-20%] w-[600px] h-[600px] bg-[#8b5cf6]/5 rounded-full blur-[150px] pointer-events-none" />
+      <div className="absolute bottom-[-30%] right-[-20%] w-[600px] h-[600px] bg-[#ec4899]/5 rounded-full blur-[150px] pointer-events-none" />
 
       <div className="z-10 flex flex-col items-center w-full max-w-sm">
-        
+
         {/* Brand */}
-        <div className="mb-10 flex flex-col items-center animate-in fade-in zoom-in duration-700">
-          <div className="w-16 h-16 bg-gradient-to-br from-brand-400 to-brand-600 rounded-2xl flex items-center justify-center text-slate-900 shadow-2xl shadow-brand-500/30 mb-4">
-             <Zap size={40} fill="currentColor" />
+        <div className="mb-8 flex flex-col items-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-[#8b5cf6] to-[#7c3aed] rounded-2xl flex items-center justify-center text-white shadow-2xl neon-glow mb-4">
+            <Zap size={36} fill="currentColor" />
           </div>
-          <h1 className="font-bold text-3xl text-white tracking-tight">Pips&<span className="text-brand-500">Profit</span></h1>
-          <p className="text-slate-500 text-sm font-medium tracking-wider uppercase mt-1">Secure Terminal Access</p>
+          <h1 className="font-bold text-2xl text-white tracking-tight">
+            Day Trading <span className="text-[#8b5cf6] neon-text">Journal</span>
+          </h1>
         </div>
 
-        {/* VIEW: Register Name */}
+        {/* Register Name View */}
         {view === 'register_name' && (
-          <div className="w-full animate-in slide-in-from-right-8 duration-500">
-            <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-6 shadow-xl backdrop-blur-sm">
-              <h2 className="text-xl font-bold text-white mb-2 text-center">Create Profile</h2>
-              <p className="text-slate-400 text-sm mb-6 text-center">Enter your name to personalize your journal.</p>
-              
-              <form onSubmit={handleNameSubmit}>
-                <div className="relative mb-6">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                  <input 
-                    type="text" 
-                    autoFocus
-                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-slate-600 focus:border-brand-500 focus:ring-1 focus:ring-brand-500 outline-none transition-all"
-                    placeholder="Your Name"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
+          <div className="w-full">
+            <div className="stat-card p-6 mb-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-[#8b5cf6]/10 flex items-center justify-center">
+                  <User size={20} className="text-[#8b5cf6]" />
                 </div>
-                <button 
-                  type="submit"
-                  disabled={name.trim().length === 0}
-                  className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 font-bold py-3 rounded-xl shadow-lg shadow-brand-500/20 transition-all flex items-center justify-center gap-2"
-                >
-                  Continue <ArrowRight size={18} />
-                </button>
-              </form>
-            </div>
-            
-            {/* PIN Warning */}
-            <div className="mt-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
-              <div className="flex gap-2 items-start">
-                <AlertTriangle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-amber-500/80">
-                  <span className="font-bold">Important:</span> This app works offline. If you forget your PIN, there is no recovery option. 
-                  Please remember your PIN or use the backup feature regularly.
-                </p>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Welcome</h2>
+                  <p className="text-xs text-slate-500">Enter your name to get started</p>
+                </div>
               </div>
+
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Your name"
+                className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 text-white placeholder-slate-500 focus:border-[#8b5cf6]/50 focus:outline-none transition-colors"
+                autoFocus
+              />
             </div>
+
+            <button
+              onClick={() => name.trim() && setView('register_pin')}
+              disabled={!name.trim()}
+              className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed neon-glow"
+              style={{
+                background: name.trim() ? 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)' : '#1e293b',
+                color: name.trim() ? 'white' : '#64748b'
+              }}
+            >
+              Continue <ArrowRight size={18} />
+            </button>
           </div>
         )}
 
-        {/* VIEW: PIN Entry (Register or Login) */}
-        {(view === 'register_pin' || view === 'login') && (
-          <div className="w-full animate-in slide-in-from-right-8 duration-500 flex flex-col items-center">
-             
-             <div className="mb-8 text-center">
-                <h2 className="text-xl font-bold text-white mb-1">
-                  {view === 'register_pin' ? 'Set Access PIN' : `Welcome back, ${name}`}
-                </h2>
-                <p className="text-slate-400 text-sm flex items-center justify-center gap-2">
-                  <Lock size={12} />
-                  {view === 'register_pin' ? 'Create a 6-digit code' : 'Enter your PIN to unlock'}
-                </p>
-             </div>
-
-            {/* PIN Dots Display */}
-            <div className="flex gap-4 mb-10">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div 
-                  key={i} 
-                  className={`w-4 h-4 rounded-full transition-all duration-300 ${
-                    i < pin.length 
-                      ? error 
-                        ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]'
-                        : 'bg-brand-500 shadow-[0_0_10px_rgba(16,185,129,0.8)] scale-110' 
-                      : 'bg-slate-800 border border-slate-700'
-                  }`}
-                ></div>
-              ))}
+        {/* Register PIN View */}
+        {view === 'register_pin' && (
+          <div className="w-full text-center">
+            <div className="flex items-center gap-3 justify-center mb-2">
+              <div className="w-10 h-10 rounded-xl bg-[#8b5cf6]/10 flex items-center justify-center">
+                <Lock size={20} className="text-[#8b5cf6]" />
+              </div>
             </div>
+            <h2 className="text-lg font-bold text-white mb-1">
+              {pin.length < 6 ? 'Create PIN' : 'Confirm PIN'}
+            </h2>
+            <p className="text-xs text-slate-500 mb-2">
+              {pin.length < 6 ? 'Choose a 6-digit PIN' : 'Re-enter your PIN to confirm'}
+            </p>
 
-            {/* Error Message */}
-            <div className="h-6 mb-4">
-                {error && <span className="text-rose-500 text-sm font-medium animate-pulse">Incorrect PIN. Please try again.</span>}
-            </div>
-
-            {/* Keypad */}
-            <div className="grid grid-cols-3 gap-4 w-full px-4">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
-                <button
-                  key={num}
-                  onClick={() => handleNumberClick(num.toString())}
-                  className="h-16 w-16 mx-auto rounded-full bg-slate-800/50 border border-slate-700 hover:bg-slate-700 hover:border-brand-500/50 text-2xl text-white font-medium transition-all active:scale-90 flex items-center justify-center"
-                >
-                  {num}
-                </button>
-              ))}
-              
-              <button
-                onClick={handleClear}
-                className="h-16 w-16 mx-auto rounded-full hover:bg-slate-800/50 text-sm text-slate-500 font-bold uppercase transition-all active:scale-90 flex items-center justify-center"
-              >
-                CLR
-              </button>
-              
-              <button
-                onClick={() => handleNumberClick('0')}
-                className="h-16 w-16 mx-auto rounded-full bg-slate-800/50 border border-slate-700 hover:bg-slate-700 hover:border-brand-500/50 text-2xl text-white font-medium transition-all active:scale-90 flex items-center justify-center"
-              >
-                0
-              </button>
-
-              <button
-                onClick={handleDelete}
-                className="h-16 w-16 mx-auto rounded-full hover:bg-slate-800/50 text-slate-400 hover:text-rose-400 transition-all active:scale-90 flex items-center justify-center"
-              >
-                <Delete size={24} />
-              </button>
-            </div>
-
-            {view === 'register_pin' && (
-              <>
-                <button onClick={() => setView('register_preference')} className="mt-8 text-sm text-slate-500 hover:text-white transition-colors">
-                  Back to Preferences
-                </button>
-                {/* PIN Warning */}
-                <div className="mt-6 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl max-w-xs">
-                  <div className="flex gap-2 items-start">
-                    <AlertTriangle size={14} className="text-amber-500 mt-0.5 flex-shrink-0" />
-                    <p className="text-[10px] text-amber-500/80">
-                      <span className="font-bold">Remember this PIN!</span> No recovery option if forgotten. Use backups regularly.
-                    </p>
-                  </div>
-                </div>
-              </>
+            {error && (
+              <p className="text-[#f472b6] text-sm mb-2">{error}</p>
             )}
 
-            {view === 'login' && (
-              <button 
-                onClick={() => setShowResetConfirm(true)} 
-                className="mt-8 text-xs text-slate-600 hover:text-rose-400 transition-colors"
-              >
-                Forgot PIN? Reset App
-              </button>
+            {renderPinDots(pin.length < 6 ? pin : confirmPin)}
+            {renderNumpad()}
+          </div>
+        )}
+
+        {/* Login View */}
+        {view === 'login' && storedUser && (
+          <div className="w-full text-center">
+            <h2 className="text-xl font-bold text-white mb-1">
+              Welcome back, {storedUser.name}
+            </h2>
+            <p className="text-xs text-slate-500 flex items-center justify-center gap-2 mb-2">
+              <Lock size={12} /> Enter your PIN to unlock
+            </p>
+
+            {error && (
+              <p className="text-[#f472b6] text-sm mb-2">{error}</p>
             )}
+
+            {renderPinDots(pin)}
+            {renderNumpad()}
+
+            {/* Forgot PIN button */}
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="mt-6 text-xs text-slate-500 hover:text-[#f472b6] transition-colors"
+            >
+              Forgot PIN?
+            </button>
           </div>
         )}
 
         {/* Reset Confirmation Modal */}
         {showResetConfirm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 max-w-sm w-full animate-in zoom-in-95 duration-200">
-              <div className="text-center mb-4">
-                <div className="w-12 h-12 bg-rose-500/20 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Trash2 size={24} className="text-rose-500" />
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
+            <div className="w-full max-w-sm p-6 rounded-2xl bg-slate-900 border border-slate-700">
+              <div className="flex items-center justify-center mb-4">
+                <div className="w-14 h-14 rounded-full bg-[#f472b6]/10 flex items-center justify-center">
+                  <AlertTriangle size={28} className="text-[#f472b6]" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">Reset Application?</h3>
-                <p className="text-sm text-slate-400">
-                  This will <span className="text-rose-400 font-bold">permanently delete</span> all your data including trades, accounts, and settings.
-                </p>
               </div>
-
-              <div className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 mb-4">
-                <p className="text-xs text-rose-400 text-center">
-                  ⚠️ Make sure you've exported your trade logs before resetting!
-                </p>
-              </div>
-
-              <div className="mb-4">
-                <label className="text-xs text-slate-500 mb-2 block">Type <span className="font-mono font-bold text-white">RESET</span> to confirm:</label>
-                <input
-                  type="text"
-                  value={resetConfirmText}
-                  onChange={e => setResetConfirmText(e.target.value.toUpperCase())}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-center font-mono focus:border-rose-500 outline-none"
-                  placeholder="Type RESET"
-                />
-              </div>
-
-              <div className="flex gap-2">
+              <h3 className="text-lg font-bold text-white text-center mb-2">Reset PIN?</h3>
+              <p className="text-sm text-slate-400 text-center mb-6">
+                <span className="text-[#f472b6] font-semibold">Warning:</span> This will permanently delete <span className="text-white font-medium">ALL</span> your data including trades, accounts, and settings. This action cannot be undone.
+              </p>
+              <div className="flex gap-3">
                 <button
-                  onClick={handleResetApp}
-                  disabled={resetConfirmText !== 'RESET'}
-                  className="flex-1 bg-rose-500 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-2 rounded-lg transition-colors"
-                >
-                  Reset Everything
-                </button>
-                <button
-                  onClick={() => {
-                    setShowResetConfirm(false);
-                    setResetConfirmText('');
-                  }}
-                  className="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-medium py-2 rounded-lg transition-colors"
+                  onClick={() => setShowResetConfirm(false)}
+                  className="flex-1 py-3 rounded-xl font-medium text-sm bg-slate-700 text-white hover:bg-slate-600 transition-colors"
                 >
                   Cancel
+                </button>
+                <button
+                  onClick={handleResetPin}
+                  className="flex-1 py-3 rounded-xl font-medium text-sm bg-[#f472b6] text-white hover:bg-[#ec4899] transition-colors"
+                >
+                  Reset Everything
                 </button>
               </div>
             </div>
           </div>
         )}
-
-        <div className="mt-12 text-center">
-            <p className="text-xs text-slate-600">Protected by Pips&Profit Security Layer v2.1</p>
-        </div>
 
       </div>
     </div>

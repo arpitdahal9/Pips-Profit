@@ -78,8 +78,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed = false,
               </div>
               {!isCollapsed && (
                 <div>
-                    <h1 className="font-bold text-xl text-white tracking-tight leading-none">Pips&<span className="text-brand-500">Profit</span></h1>
-                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Pro Terminal</span>
+                    <h1 className="font-bold text-xl text-white tracking-tight leading-none">Day Trading <span className="text-brand-500">Journal</span></h1>
+                    <span className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold">Trading Journal</span>
                 </div>
               )}
           </div>
@@ -115,7 +115,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed = false,
           <div>
               {!isCollapsed && <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider px-3 mb-3">Configuration</div>}
               <div className="space-y-1">
-                  <NavItem to="/strategies" icon={ListChecks} label="Strategies" />
+                  <NavItem to="/trade-setup" icon={ListChecks} label="Trade Setup" />
               </div>
           </div>
         </div>

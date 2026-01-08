@@ -19,24 +19,6 @@ export const MOCK_STRATEGIES: Strategy[] = [
       { id: 'r2', text: 'M5 Change of Character (CHoCH)', checked: true },
       { id: 'r3', text: 'Enter on FVG retracement', checked: false },
     ]
-  },
-  {
-    id: 's2',
-    title: 'GJ Asian Bounce',
-    symbol: 'GBPJPY',
-    items: [
-      { id: 'r4', text: 'Price at Asian Range Low', checked: false },
-      { id: 'r5', text: 'Bullish Engulfing on M15', checked: false },
-    ]
-  },
-  {
-    id: 's3',
-    title: 'EU NY Continuation',
-    symbol: 'EURUSD',
-    items: [
-      { id: 'r6', text: 'London Trend is clear', checked: false },
-      { id: 'r7', text: 'Retest of Broken Structure', checked: false },
-    ]
   }
 ];
 

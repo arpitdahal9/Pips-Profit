@@ -71,3 +71,53 @@ body {
         font-size: 16px !important;
     }
 }
+
+/* Animations */
+@keyframes slide-up-fade-in {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.slide-up-fade-in {
+    animation: slide-up-fade-in 0.3s ease-out;
+}
+
+@keyframes gradientShift {
+    0% {
+        background-position: 0% 50%;
+    }
+    50% {
+        background-position: 100% 50%;
+    }
+    100% {
+        background-position: 0% 50%;
+    }
+}
+
+.gradient-animated {
+    background: linear-gradient(-45deg, #0a0612, #120a1e, #0f0a1a, #120a1e);
+    background-size: 400% 400%;
+    animation: gradientShift 15s ease infinite;
+}
+
+.stat-card {
+    background: rgba(15, 10, 30, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(139, 92, 246, 0.1);
+    border-radius: 16px;
+}
+
+.neon-glow {
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.5), 0 0 40px rgba(139, 92, 246, 0.3);
+}
+
+.neon-text {
+    text-shadow: 0 0 10px rgba(139, 92, 246, 0.8), 0 0 20px rgba(139, 92, 246, 0.6);
+}

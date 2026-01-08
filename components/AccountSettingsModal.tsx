@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Plus, Trash2, Star, Building2, Wallet, Edit2, Check, Eye, EyeOff, AlertCircle, Camera, Download, Upload, ToggleLeft, ToggleRight, Database, Clock } from 'lucide-react';
+import { X, Plus, Trash2, Building2, Wallet, Edit2, Check, Eye, EyeOff, AlertCircle, Camera, Download, Upload, ToggleLeft, ToggleRight, Database, Clock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { TradingAccount } from '../types';
 
@@ -28,7 +28,7 @@ interface AccountSettingsModalProps {
 }
 
 const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onClose }) => {
-  const { user, updateUser, accounts, addAccount, updateAccount, deleteAccount, setMainAccount, getAccountBalance, trades, settings, updateSettings, exportData, importData } = useStore();
+  const { user, updateUser, accounts, addAccount, updateAccount, deleteAccount, getAccountBalance, trades, settings, updateSettings, exportData, importData } = useStore();
   const [activeTab, setActiveTab] = useState<'profile' | 'accounts' | 'backup'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
@@ -82,7 +82,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
       name: newAccount.name.trim(),
       broker: newAccount.broker.trim() || undefined,
       startingBalance: parseFloat(newAccount.startingBalance) || 0,
-      isMain: accounts.length === 0, // First account becomes main
+      isMain: false,
       isHidden: false,
       createdAt: new Date().toISOString()
     };
@@ -289,10 +289,6 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                     <p className="text-xs text-slate-500">Total Accounts</p>
                     <p className="text-xl font-bold text-white">{accounts.length}</p>
                   </div>
-                  <div>
-                    <p className="text-xs text-slate-500">Main Account</p>
-                    <p className="text-xl font-bold text-brand-400">{accounts.find(a => a.isMain)?.name || 'None'}</p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -378,11 +374,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
               {visibleAccounts.map(account => (
                 <div
                   key={account.id}
-                  className={`p-4 rounded-xl border transition-all ${
-                    account.isMain
-                      ? 'bg-brand-500/5 border-brand-500/30'
-                      : 'bg-slate-800/30 border-slate-700'
-                  }`}
+                  className="p-4 rounded-xl border transition-all bg-slate-800/30 border-slate-700"
                 >
                   {editingAccountId === account.id ? (
                     // Edit Mode
@@ -465,11 +457,6 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="font-bold text-white">{account.name}</h3>
-                              {account.isMain && (
-                                <span className="px-2 py-0.5 text-[10px] font-bold uppercase bg-brand-500/20 text-brand-400 rounded">
-                                  Main
-                                </span>
-                              )}
                             </div>
                             {account.broker && (
                               <p className="text-xs text-slate-500 flex items-center gap-1">
@@ -486,15 +473,6 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                           >
                             <Edit2 size={16} />
                           </button>
-                          {!account.isMain && (
-                            <button
-                              onClick={() => setMainAccount(account.id)}
-                              className="p-2 text-slate-500 hover:text-brand-400 transition-colors"
-                              title="Set as main account"
-                            >
-                              <Star size={16} />
-                            </button>
-                          )}
                           <button
                             onClick={() => handleToggleHidden(account)}
                             className="p-2 text-slate-500 hover:text-amber-400 transition-colors"

@@ -38,14 +38,13 @@ interface StoreContextType {
   addTrade: (trade: Trade) => void;
   updateTrade: (id: string, updates: Partial<Trade>) => void;
   addStrategy: (strategy: Strategy) => void;
+  updateStrategy: (id: string, updates: Partial<Strategy>) => void;
   deleteStrategy: (id: string) => void;
   addTag: (tag: Tag) => void;
   deleteTag: (id: string) => void;
   addAccount: (account: TradingAccount) => void;
   updateAccount: (id: string, updates: Partial<TradingAccount>) => void;
   deleteAccount: (id: string) => void;
-  setMainAccount: (id: string) => void;
-  getMainAccount: () => TradingAccount | undefined;
   getAccountBalance: (accountId: string) => number;
   exportData: () => void;
   importData: (file: File) => Promise<{ success: boolean; message: string }>;
@@ -186,7 +185,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     };
 
     const jsonString = JSON.stringify(backupData, null, 2);
-    const fileName = `pipsprofit-backup-${new Date().toISOString().split('T')[0]}.json`;
+    const fileName = `day-trading-journal-backup-${new Date().toISOString().split('T')[0]}.json`;
 
     // Check if running on native platform (Capacitor)
     const isNative = typeof (window as any).Capacitor !== 'undefined' && 
@@ -209,7 +208,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
 
         // Share the file so user can save it wherever they want
         await Share.share({
-          title: 'PipsProfit Backup',
+          title: 'Day Trading Journal Backup',
           text: 'Your trading journal backup',
           url: result.uri,
           dialogTitle: 'Save your backup file'
@@ -313,6 +312,10 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     setStrategies(prev => [...prev, strategy]);
   };
 
+  const updateStrategy = (id: string, updates: Partial<Strategy>) => {
+    setStrategies(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
+  };
+
   const deleteStrategy = (id: string) => {
     setStrategies(prev => prev.filter(s => s.id !== id));
   };
@@ -334,30 +337,8 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
   };
 
   const deleteAccount = (id: string) => {
-    const account = accounts.find(a => a.id === id);
-    
-    // If deleting main account and there are other accounts, set another as main
-    if (account?.isMain && accounts.length > 1) {
-      const newMain = accounts.find(a => a.id !== id);
-      if (newMain) {
-        setAccounts(prev => prev
-          .filter(a => a.id !== id)
-          .map(a => a.id === newMain.id ? { ...a, isMain: true } : a)
-        );
-        return;
-      }
-    }
-    
     // Allow deleting any account, including the last one
     setAccounts(prev => prev.filter(a => a.id !== id));
-  };
-
-  const setMainAccount = (id: string) => {
-    setAccounts(prev => prev.map(a => ({ ...a, isMain: a.id === id })));
-  };
-
-  const getMainAccount = (): TradingAccount | undefined => {
-    return accounts.find(a => a.isMain);
   };
 
   const getAccountBalance = (accountId: string): number => {
@@ -386,15 +367,14 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       deleteTrade, 
       addTrade,
       updateTrade,
-      addStrategy, 
+      addStrategy,
+      updateStrategy,
       deleteStrategy,
       addTag,
       deleteTag,
       addAccount,
       updateAccount,
       deleteAccount,
-      setMainAccount,
-      getMainAccount,
       getAccountBalance,
       exportData,
       importData

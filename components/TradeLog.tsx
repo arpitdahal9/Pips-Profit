@@ -1,59 +1,1148 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { ArrowRight, Trash2, Plus, Wallet, ChevronDown, ChevronUp } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useTheme } from '../context/ThemeContext';
+import { TrendingUp, TrendingDown, Trash2, Plus, ChevronDown, ChevronUp, Filter, X, Image, Wallet, Edit2, RotateCcw, Save, XCircle, AlertCircle, Heart, List } from 'lucide-react';
 import TradeWizard from './TradeWizard';
+import TradeTypeSelector from './TradeTypeSelector';
+import MultipleTradeWizard from './MultipleTradeWizard';
+import { Trade, TradeStatus } from '../types';
+import { getFeelingEmoji } from '../utils/feelings';
+
+// Swipeable Trade Item Component
+const SwipeableTradeItem: React.FC<{
+  trade: Trade;
+  isExpanded: boolean;
+  isProfit: boolean;
+  isSwiped: boolean;
+  winColor: string;
+  lossColor: string;
+  textPrimary: string;
+  textSecondary: string;
+  cardBg: string;
+  theme: any;
+  isLightTheme: boolean;
+  onToggleExpand: () => void;
+  onSwipeChange: (swiped: boolean) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onImageClick?: (image: string) => void;
+  onSave?: (updatedTrade: Partial<Trade>) => void;
+  isEditing?: boolean;
+  viewMode?: 'compact' | 'normal' | 'list';
+}> = ({
+  trade,
+  isExpanded,
+  isProfit,
+  isSwiped,
+  winColor,
+  lossColor,
+  textPrimary,
+  textSecondary,
+  cardBg,
+  theme,
+  isLightTheme,
+  onToggleExpand,
+  onSwipeChange,
+  onEdit,
+  onDelete,
+  onImageClick,
+  onSave,
+  isEditing = false,
+  viewMode = 'normal'
+}) => {
+  const swipeRef = useRef<HTMLDivElement>(null);
+  const startXRef = useRef<number>(0);
+  const startYRef = useRef<number>(0);
+  const currentXRef = useRef<number>(0);
+  const isDraggingRef = useRef<boolean>(false);
+  const isVerticalScrollRef = useRef<boolean>(false);
+  const imageUploadRef = useRef<HTMLInputElement>(null);
+  
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    symbol: trade?.symbol || '',
+    direction: trade?.side === 'LONG' ? 'BUY' : 'SELL',
+    entryPrice: trade?.entryPrice?.toString() || '',
+    exitPrice: trade?.exitPrice?.toString() || '',
+    lots: trade?.lots?.toString() || '',
+    pnl: trade?.pnl?.toString() || '0',
+    commission: trade?.commission?.toString() || '',
+    stopLoss: '',
+    takeProfit: '',
+    notes: trade?.notes || '',
+    photos: trade?.photos || (trade?.photo ? [trade.photo] : []) as string[],
+    date: trade?.date || '',
+    time: trade?.time || ''
+  });
+  
+  // Initialize edit form when entering edit mode
+  useEffect(() => {
+    if (isEditing && trade) {
+      const stopLoss = trade.riskAmount && trade.entryPrice ? (trade.side === 'LONG' 
+        ? (trade.entryPrice - trade.riskAmount).toString()
+        : (trade.entryPrice + trade.riskAmount).toString()
+      ) : '';
+      const takeProfit = trade.tpAmount && trade.entryPrice ? (trade.side === 'LONG'
+        ? (trade.entryPrice + trade.tpAmount).toString()
+        : (trade.entryPrice - trade.tpAmount).toString()
+      ) : '';
+      
+      setEditForm({
+        symbol: trade.symbol || '',
+        direction: trade.side === 'LONG' ? 'BUY' : 'SELL',
+        entryPrice: trade.entryPrice?.toString() || '',
+        exitPrice: trade.exitPrice?.toString() || '',
+        lots: trade.lots?.toString() || '',
+        pnl: trade.pnl?.toString() || '0',
+        commission: trade.commission?.toString() || '',
+        stopLoss,
+        takeProfit,
+        notes: trade.notes || '',
+        photos: trade.photos || (trade.photo ? [trade.photo] : []),
+        date: trade.date || '',
+        time: trade.time || ''
+      });
+    }
+  }, [isEditing, trade]);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startXRef.current = e.touches[0].clientX;
+    startYRef.current = e.touches[0].clientY;
+    isDraggingRef.current = true;
+    isVerticalScrollRef.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDraggingRef.current) return;
+    
+    const deltaX = Math.abs(e.touches[0].clientX - startXRef.current);
+    const deltaY = Math.abs(e.touches[0].clientY - startYRef.current);
+    
+    // Always prioritize vertical scrolling - if vertical movement is significant, allow scrolling
+    if (deltaY > 5) {
+      isVerticalScrollRef.current = true;
+      return; // Don't interfere with scrolling
+    }
+    
+    // Only process horizontal swipe if vertical movement is minimal
+    if (deltaX > 10 && deltaY < 5) {
+      e.preventDefault(); // Only prevent default for horizontal swipes
+      
+      currentXRef.current = e.touches[0].clientX - startXRef.current;
+      const swipeAmount = currentXRef.current;
+      
+      // Require longer swipe distance (80px instead of 50px)
+      if (swipeAmount < 0 && Math.abs(swipeAmount) > 80) {
+        // Swiping left - reveal actions
+        if (swipeRef.current) {
+          swipeRef.current.style.transform = `translateX(${swipeAmount}px)`;
+        }
+      } else if (swipeAmount > 0) {
+        // Swiping right - hide actions
+        if (swipeRef.current) {
+          swipeRef.current.style.transform = `translateX(${Math.max(0, swipeAmount)}px)`;
+        }
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+    
+    // Only process swipe if it wasn't a vertical scroll
+    if (!isVerticalScrollRef.current) {
+      const swipeAmount = currentXRef.current;
+      
+      // Require longer swipe distance (120px instead of 100px)
+      if (swipeAmount < -120) {
+        // Swiped left enough - show actions
+        onSwipeChange(true);
+        if (swipeRef.current) {
+          swipeRef.current.style.transform = 'translateX(-160px)';
+        }
+      } else {
+        // Reset position
+        onSwipeChange(false);
+        if (swipeRef.current) {
+          swipeRef.current.style.transform = 'translateX(0)';
+        }
+      }
+    }
+    
+    currentXRef.current = 0;
+    isVerticalScrollRef.current = false;
+  };
+
+  const handleClick = () => {
+    if (!isDraggingRef.current && !isSwiped) {
+      onToggleExpand();
+    } else if (isSwiped) {
+      // Close swipe if clicked while swiped
+      onSwipeChange(false);
+      if (swipeRef.current) {
+        swipeRef.current.style.transform = 'translateX(0)';
+      }
+    }
+  };
+
+  // Reset transform when isSwiped changes externally
+  useEffect(() => {
+    if (swipeRef.current) {
+      if (isSwiped) {
+        swipeRef.current.style.transform = 'translateX(-160px)';
+      } else {
+        swipeRef.current.style.transform = 'translateX(0)';
+      }
+    }
+  }, [isSwiped]);
+
+  return (
+    <div
+      className="relative rounded-2xl overflow-hidden"
+      style={{ height: 'auto' }}
+    >
+      {/* Main Card */}
+      <div
+        ref={swipeRef}
+        className="rounded-2xl overflow-hidden transition-transform duration-200"
+        style={{
+          backgroundColor: isLightTheme ? '#ffffff' : '#1e293b',
+          border: `1px solid ${theme.primary}15`,
+          touchAction: 'pan-y pan-x',
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        {/* Main Row - normal vs detail view */}
+        {viewMode === 'list' ? (
+          <button
+            onClick={handleClick}
+            className="w-full px-3 py-2.5 flex items-center justify-between text-left border-b"
+            style={{ borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.3)' }}
+          >
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div
+                className="w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0"
+                style={{ backgroundColor: isProfit ? `${winColor}15` : `${lossColor}15` }}
+              >
+                {isProfit ? (
+                  <TrendingUp size={14} style={{ color: winColor }} />
+                ) : (
+                  <TrendingDown size={14} style={{ color: lossColor }} />
+                )}
+              </div>
+              <span className={`font-bold text-sm ${textPrimary} truncate`}>{trade.symbol}</span>
+              <span
+                className="text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0"
+                style={{
+                  backgroundColor: trade.side === 'LONG' ? `${winColor}15` : `${lossColor}15`,
+                  color: trade.side === 'LONG' ? winColor : lossColor
+                }}
+              >
+                {trade.side}
+              </span>
+              <span className={`text-[10px] ${textSecondary} flex-shrink-0`}>
+                {trade.time} • {trade.session}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {(() => {
+                const net = trade.pnl + (trade.commission || 0);
+                return (
+                  <p
+                    className="font-mono font-bold text-sm"
+                    style={{ color: net >= 0 ? winColor : lossColor }}
+                  >
+                    {net >= 0 ? '+' : ''}${net.toFixed(2)}
+                  </p>
+                );
+              })()}
+              {isExpanded ? (
+                <ChevronUp size={14} className={textSecondary} />
+              ) : (
+                <ChevronDown size={14} className={textSecondary} />
+              )}
+            </div>
+          </button>
+        ) : (
+          <button
+            onClick={handleClick}
+            className="w-full p-4 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div
+                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                style={{ backgroundColor: isProfit ? `${winColor}15` : `${lossColor}15` }}
+              >
+                {isProfit ? (
+                  <TrendingUp size={18} style={{ color: winColor }} />
+                ) : (
+                  <TrendingDown size={18} style={{ color: lossColor }} />
+                )}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`font-bold ${textPrimary}`}>{trade.symbol}</span>
+                  <span
+                    className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                    style={{
+                      backgroundColor: trade.side === 'LONG' ? `${winColor}15` : `${lossColor}15`,
+                      color: trade.side === 'LONG' ? winColor : lossColor
+                    }}
+                  >
+                    {trade.side}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className={`text-[10px] ${textSecondary}`}>
+                    {trade.time} • {trade.session}
+                  </p>
+                  {(() => {
+                    const emotions = trade.emotions && Array.isArray(trade.emotions) && trade.emotions.length > 0
+                      ? trade.emotions
+                      : trade.emotion
+                      ? trade.emotion.split(', ').filter(Boolean)
+                      : [];
+                    return emotions.length > 0 ? (
+                      <span className="text-xs" title={emotions.join(', ')}>
+                        {getFeelingEmoji(emotions[0].trim())}
+                      </span>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+            </div>
+
+          <div className="flex items-center gap-3">
+              <div className="text-right">
+                {(() => {
+                  const net = trade.pnl + (trade.commission || 0);
+                  return (
+                    <p
+                      className="font-mono font-bold"
+                      style={{ color: net >= 0 ? winColor : lossColor }}
+                    >
+                      {net >= 0 ? '+' : ''}${net.toFixed(2)}
+                    </p>
+                  );
+                })()}
+              </div>
+              {isExpanded ? (
+                <ChevronUp size={16} className={textSecondary} />
+              ) : (
+                <ChevronDown size={16} className={textSecondary} />
+              )}
+            </div>
+          </button>
+        )}
+
+        {/* Expanded Details - Editable or View Mode */}
+        {isExpanded && (
+          <div
+            className="px-4 pb-4 pt-0 border-t"
+            style={{ 
+              borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.3)',
+              touchAction: 'pan-y'
+            }}
+            onTouchStart={(e) => {
+              // Don't prevent default - allow scrolling
+            }}
+            onTouchMove={(e) => {
+              // Don't prevent default - allow scrolling
+            }}
+          >
+            {isEditing ? (
+              // Edit Mode
+              <div className="mt-4 space-y-3">
+                {/* Symbol & Direction */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Symbol</label>
+                    <input
+                      type="text"
+                      value={editForm.symbol}
+                      onChange={e => setEditForm({ ...editForm, symbol: e.target.value.toUpperCase() })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Direction</label>
+                    <div className="grid grid-cols-2 gap-1">
+                      <button
+                        onClick={() => setEditForm({ ...editForm, direction: 'BUY' })}
+                        className={`py-2 rounded-lg font-bold text-xs transition-all ${
+                          editForm.direction === 'BUY'
+                            ? 'bg-emerald-500 text-white'
+                            : isLightTheme ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        BUY
+                      </button>
+                      <button
+                        onClick={() => setEditForm({ ...editForm, direction: 'SELL' })}
+                        className={`py-2 rounded-lg font-bold text-xs transition-all ${
+                          editForm.direction === 'SELL'
+                            ? 'bg-rose-500 text-white'
+                            : isLightTheme ? 'bg-slate-200 text-slate-600' : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        SELL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Date & Time */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Date</label>
+                    <input
+                      type="date"
+                      value={editForm.date}
+                      onChange={e => setEditForm({ ...editForm, date: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Time</label>
+                    <input
+                      type="text"
+                      value={editForm.time}
+                      onChange={e => {
+                        const value = e.target.value.replace(/[^0-9:]/g, '');
+                        let formatted = value;
+                        if (value.length > 2 && !value.includes(':')) {
+                          formatted = value.slice(0, 2) + ':' + value.slice(2, 5);
+                        }
+                        if (formatted.length <= 5) {
+                          setEditForm({ ...editForm, time: formatted });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const value = e.target.value;
+                        if (value && !value.includes(':')) {
+                          const formatted = value.length === 4 ? value.slice(0, 2) + ':' + value.slice(2) : value;
+                          setEditForm({ ...editForm, time: formatted });
+                        }
+                      }}
+                      placeholder="HH:MM"
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Entry & Exit Price */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Entry Price</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.entryPrice}
+                      onChange={e => setEditForm({ ...editForm, entryPrice: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Exit Price</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.exitPrice}
+                      onChange={e => setEditForm({ ...editForm, exitPrice: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Lot Size, P&L & Commission */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Lot Size</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.lots}
+                      onChange={e => setEditForm({ ...editForm, lots: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>P&L</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.pnl}
+                      onChange={e => setEditForm({ ...editForm, pnl: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Commission</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.commission}
+                      onChange={e => setEditForm({ ...editForm, commission: e.target.value })}
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                </div>
+
+
+                {/* Stop Loss & Take Profit */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Stop Loss</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.stopLoss}
+                      onChange={e => setEditForm({ ...editForm, stopLoss: e.target.value })}
+                      placeholder="Optional"
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                  <div>
+                    <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Take Profit</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={editForm.takeProfit}
+                      onChange={e => setEditForm({ ...editForm, takeProfit: e.target.value })}
+                      placeholder="Optional"
+                      className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                    />
+                  </div>
+                </div>
+
+                {/* Notes */}
+                <div>
+                  <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Notes</label>
+                  <textarea
+                    value={editForm.notes}
+                    onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                    rows={3}
+                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-brand-500 outline-none resize-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                  />
+                </div>
+
+                {/* Screenshot Upload - Up to 2 screenshots */}
+                <div>
+                  <label className={`text-[10px] font-bold uppercase mb-2 block ${textSecondary}`}>Attach Screenshots (Max 2)</label>
+                  
+                  <div className="space-y-2">
+                    {/* Display existing screenshots */}
+                    {editForm.photos.map((photo, index) => (
+                      <div key={index} className="relative">
+                        <img
+                          src={photo}
+                          alt={`Trade screenshot ${index + 1}`}
+                          className="w-full h-40 object-cover rounded-xl border border-slate-700"
+                        />
+                        <button
+                          onClick={() => {
+                            const newPhotos = editForm.photos.filter((_, i) => i !== index);
+                            setEditForm({ ...editForm, photos: newPhotos });
+                          }}
+                          className="absolute top-2 right-2 p-1.5 bg-slate-900/80 hover:bg-slate-800 rounded-lg text-white transition-colors"
+                        >
+                          <XCircle size={18} />
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {/* Add screenshot button (only show if less than 2) */}
+                    {editForm.photos.length < 2 && (
+                      <button
+                        onClick={() => imageUploadRef.current?.click()}
+                        className="w-full py-3 border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors"
+                      >
+                        <Image size={24} className="text-slate-400" />
+                        <span className={`text-sm ${textSecondary}`}>Tap to add screenshot</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  <input
+                    ref={imageUploadRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        if (!file.type.startsWith('image/')) {
+                          alert('Please select an image file');
+                          return;
+                        }
+                        if (file.size > 5 * 1024 * 1024) {
+                          alert('Image size must be less than 5MB');
+                          return;
+                        }
+                        if (editForm.photos.length >= 2) {
+                          alert('Maximum 2 screenshots allowed');
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const result = event.target?.result as string;
+                          if (result) {
+                            setEditForm({ ...editForm, photos: [...editForm.photos, result] });
+                          }
+                        };
+                        reader.onerror = () => {
+                          alert('Failed to read image file');
+                        };
+                        reader.readAsDataURL(file);
+                        if (imageUploadRef.current) imageUploadRef.current.value = '';
+                      }
+                    }}
+                  />
+                </div>
+
+                {/* Save/Cancel Buttons */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => {
+                      const pnl = parseFloat(editForm.pnl) || 0;
+                      const riskAmount = parseFloat(editForm.stopLoss) ? Math.abs(parseFloat(editForm.entryPrice) - parseFloat(editForm.stopLoss)) : undefined;
+                      const tpAmount = parseFloat(editForm.takeProfit) ? Math.abs(parseFloat(editForm.takeProfit) - parseFloat(editForm.entryPrice)) : undefined;
+                      const riskRewardRatio = riskAmount && tpAmount ? Math.round((tpAmount / riskAmount) * 100) / 100 : undefined;
+                      
+                      onSave?.({
+                        symbol: editForm.symbol.toUpperCase(),
+                        side: editForm.direction === 'BUY' ? 'LONG' : 'SHORT',
+                        entryPrice: parseFloat(editForm.entryPrice) || 0,
+                        exitPrice: parseFloat(editForm.exitPrice) || 0,
+                        lots: parseFloat(editForm.lots) || 0,
+                        pnl: pnl,
+                        commission: editForm.commission ? parseFloat(editForm.commission) : undefined,
+                        date: editForm.date,
+                        time: editForm.time,
+                        notes: editForm.notes,
+                        photos: editForm.photos.length > 0 ? editForm.photos : undefined,
+                        riskAmount,
+                        tpAmount,
+                        riskRewardRatio
+                      });
+                    }}
+                    className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <Save size={16} />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => onEdit()}
+                    className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors"
+                  >
+                    <X size={16} />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              // View Mode
+              <>
+                <div className="grid grid-cols-2 gap-3 mt-4">
+                  <div
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Entry</p>
+                    <p className={`font-mono text-sm ${textPrimary}`}>{trade.entryPrice?.toFixed(5) || 'N/A'}</p>
+                  </div>
+                  <div
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Exit</p>
+                    <p className={`font-mono text-sm ${textPrimary}`}>{trade.exitPrice?.toFixed(5) || 'N/A'}</p>
+                  </div>
+                  <div
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Lot Size</p>
+                    <p className={`font-mono text-sm ${textPrimary}`}>{trade.lots?.toFixed(2) || 'N/A'}</p>
+                  </div>
+                  <div
+                    className="p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>R:R</p>
+                    <p className={`font-mono text-sm ${textPrimary}`}>{trade.riskRewardRatio?.toFixed(2) || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {/* Net Profit/Loss (P&L + Commission) */}
+                {(trade.commission !== undefined && trade.commission !== 0) && (
+                  <div className="mt-3 p-3 rounded-xl border" style={{ 
+                    backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)',
+                    borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'
+                  }}>
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Net Profit/Loss</p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className={`text-xs ${textSecondary}`}>P&L: ${trade.pnl.toFixed(2)}</p>
+                        <p className={`text-xs ${textSecondary}`}>Commission: ${trade.commission.toFixed(2)}</p>
+                      </div>
+                      <p 
+                        className="font-mono font-bold text-lg"
+                        style={{ color: (trade.pnl + (trade.commission || 0)) >= 0 ? winColor : lossColor }}
+                      >
+                        {(trade.pnl + (trade.commission || 0)) >= 0 ? '+' : ''}${(trade.pnl + (trade.commission || 0)).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Edit/Delete Buttons */}
+                <div className="flex gap-2 mt-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onEdit();
+                    }}
+                    className="flex-1 py-2.5 bg-brand-500/20 hover:bg-brand-500/30 text-brand-400 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors border border-brand-500/30"
+                  >
+                    <Edit2 size={16} />
+                    Edit
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="flex-1 py-2.5 bg-rose-500/20 hover:bg-rose-500/30 text-rose-400 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors border border-rose-500/30"
+                  >
+                    <Trash2 size={16} />
+                    Delete
+                  </button>
+                </div>
+
+                {/* Feelings */}
+                {(() => {
+                  const emotions = trade.emotions && Array.isArray(trade.emotions) && trade.emotions.length > 0
+                    ? trade.emotions
+                    : trade.emotion
+                    ? trade.emotion.split(', ').filter(Boolean)
+                    : [];
+                  
+                  return emotions.length > 0 ? (
+                    <div
+                      className="mt-3 p-3 rounded-xl"
+                      style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <Heart size={12} className={textSecondary} />
+                        <p className={`text-[10px] uppercase ${textSecondary}`}>Feelings</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {emotions.map((emotion, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-1 text-xs rounded-full flex items-center gap-1"
+                            style={{
+                              backgroundColor: `${theme.secondary}15`,
+                              color: theme.secondary,
+                              border: `1px solid ${theme.secondary}30`
+                            }}
+                          >
+                            <span>{getFeelingEmoji(emotion.trim())}</span>
+                            <span>{emotion.trim()}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* Mistakes */}
+                {trade.mistakes && trade.mistakes.length > 0 && (
+                  <div
+                    className="mt-3 p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle size={12} className={textSecondary} />
+                      <p className={`text-[10px] uppercase ${textSecondary}`}>Mistakes</p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {trade.mistakes.map((mistake, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-1 text-[10px] rounded-full"
+                          style={{
+                            backgroundColor: `${theme.accent}15`,
+                            color: theme.accent,
+                            border: `1px solid ${theme.accent}30`
+                          }}
+                        >
+                          {mistake}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Tags */}
+                {(trade.setupTags?.length > 0 || trade.mistakeTags?.length > 0) && (
+                  <div className="flex flex-wrap gap-1.5 mt-3">
+                    {trade.setupTags?.map(tag => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 text-[10px] rounded-full"
+                        style={{
+                          backgroundColor: `${theme.primary}15`,
+                          color: theme.primary,
+                          border: `1px solid ${theme.primary}30`
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                    {trade.mistakeTags?.map(tag => (
+                      <span
+                        key={tag}
+                        className="px-2 py-1 text-[10px] rounded-full"
+                        style={{
+                          backgroundColor: `${theme.accent}15`,
+                          color: theme.accent,
+                          border: `1px solid ${theme.accent}30`
+                        }}
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Notes */}
+                {trade.notes && (
+                  <div
+                    className="mt-3 p-3 rounded-xl"
+                    style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                  >
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Notes</p>
+                    <p className={`text-xs ${isLightTheme ? 'text-slate-700' : 'text-slate-300'}`}>{trade.notes}</p>
+                  </div>
+                )}
+
+                {/* Trade Images - Support multiple screenshots */}
+                {(() => {
+                  const photos = trade.photos || (trade.photo ? [trade.photo] : []);
+                  if (photos.length > 0) {
+                    return (
+                      <div className="mt-3 space-y-2">
+                        <p className={`text-[10px] uppercase mb-1.5 ${textSecondary}`}>Trade Screenshots</p>
+                        {photos.map((photo, index) => (
+                          <div key={index}>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onImageClick?.(photo);
+                              }}
+                              className="w-full rounded-xl overflow-hidden border transition-all hover:opacity-90 active:scale-[0.98]"
+                              style={{ borderColor: `${theme.primary}30` }}
+                            >
+                              <img
+                                src={photo}
+                                alt={`Trade screenshot ${index + 1}`}
+                                className="w-full h-40 object-cover"
+                              />
+                            </button>
+                            {photos.length > 1 && (
+                              <p className={`text-[10px] mt-1 ${textSecondary} text-center`}>Screenshot {index + 1}</p>
+                            )}
+                          </div>
+                        ))}
+                        <p className={`text-[10px] mt-1 ${textSecondary} text-center`}>Tap to view fullscreen</p>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Account Creation Modal Component
+const AccountCreationModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+  theme: any;
+}> = ({ isOpen, onClose, onSuccess, theme }) => {
+  const { addAccount } = useStore();
+  const [formData, setFormData] = useState({ name: '', broker: '', startingBalance: '' });
+
+  const handleSubmit = () => {
+    if (formData.name && formData.broker && formData.startingBalance) {
+      addAccount({
+        id: `acc_${Date.now()}`,
+        name: formData.name,
+        broker: formData.broker,
+        startingBalance: parseFloat(formData.startingBalance),
+        createdAt: new Date().toISOString(),
+        isMain: true,
+        isHidden: false,
+      });
+      onSuccess();
+    }
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+      <div
+        className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl p-6"
+        style={{ borderColor: theme.primary + '30' }}
+      >
+        <div className="flex items-center gap-3 mb-4">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center"
+            style={{ backgroundColor: theme.primary + '20' }}
+          >
+            <Wallet size={24} style={{ color: theme.primary }} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Add Account First</h3>
+            <p className="text-sm text-slate-400">You need to add a trading account before logging trades</p>
+          </div>
+        </div>
+        <div className="space-y-3">
+          <input
+            type="text"
+            value={formData.name}
+            onChange={e => setFormData({ ...formData, name: e.target.value })}
+            placeholder="Account name"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+            autoFocus
+          />
+          <input
+            type="number"
+            value={formData.startingBalance}
+            onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
+            placeholder="Starting balance"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+          />
+          <div className="flex gap-2 pt-2">
+            <button
+              onClick={handleSubmit}
+              disabled={!formData.name || !formData.startingBalance}
+              className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
+            >
+              Create Account
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const TradeLog = () => {
-  const { trades, deleteTrade, accounts, updateTrade } = useStore();
+  const { trades, deleteTrade, updateTrade, addTrade, accounts } = useStore();
+  const { theme, isLightTheme } = useTheme();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingTrade, setEditingTrade] = useState<Trade | null>(null);
   const [selectedAccountFilter, setSelectedAccountFilter] = useState<string>('all');
   const [showAccountFilter, setShowAccountFilter] = useState(false);
-  const [openAccountDropdownId, setOpenAccountDropdownId] = useState<string | null>(null);
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [showAddAccountPrompt, setShowAddAccountPrompt] = useState(false);
+  const [deletedTrade, setDeletedTrade] = useState<{ trade: Trade; timeoutId: NodeJS.Timeout } | null>(null);
+  const [swipedTradeId, setSwipedTradeId] = useState<string | null>(null);
+  const [editingTradeId, setEditingTradeId] = useState<string | null>(null);
+  const [showSwipeHint, setShowSwipeHint] = useState(false);
+  const [showTradeTypeSelector, setShowTradeTypeSelector] = useState(false);
+  const [isMultipleTradeMode, setIsMultipleTradeMode] = useState(false);
+  const [activeTab, setActiveTab] = useState<'trades' | 'screenshots'>('trades');
+  const [viewMode, setViewMode] = useState<'compact' | 'normal' | 'list'>(() => {
+    const saved = localStorage.getItem('trade_log_view_mode');
+    return (saved === 'compact' || saved === 'normal' || saved === 'list') ? saved : 'normal';
+  });
+  const [showViewModeMenu, setShowViewModeMenu] = useState(false);
 
   const visibleAccounts = accounts.filter(a => !a.isHidden);
 
   const filteredTrades = useMemo(() => {
-    if (selectedAccountFilter === 'all') return trades;
-    return trades.filter(t => t.accountId === selectedAccountFilter);
+    const sorted = [...trades].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (selectedAccountFilter === 'all') return sorted;
+    return sorted.filter(t => t.accountId === selectedAccountFilter);
   }, [trades, selectedAccountFilter]);
 
   const selectedFilterAccount = accounts.find(a => a.id === selectedAccountFilter);
 
+  // Group trades by date
+  const groupedTrades = useMemo(() => {
+    const groups: { [key: string]: Trade[] } = {};
+    filteredTrades.forEach(trade => {
+      const date = trade.date;
+      if (!groups[date]) groups[date] = [];
+      groups[date].push(trade);
+    });
+    return groups;
+  }, [filteredTrades]);
+
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) return 'Today';
+    if (date.toDateString() === yesterday.toDateString()) return 'Yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+
+  const getDayPnL = (dayTrades: typeof trades) => {
+    return dayTrades.reduce((sum, t) => sum + t.pnl, 0);
+  };
+
+  // Handle trade deletion with undo
+  const handleDeleteTrade = (tradeId: string) => {
+    const trade = trades.find(t => t.id === tradeId);
+    if (!trade) return;
+
+    // Delete the trade
+    deleteTrade(tradeId);
+    setDeleteConfirmId(null);
+    setExpandedTradeId(null);
+    setSwipedTradeId(null);
+
+    // Set up undo with 10 second timer
+    const timeoutId = setTimeout(() => {
+      setDeletedTrade(null);
+    }, 10000);
+
+    setDeletedTrade({ trade, timeoutId });
+  };
+
+  // Handle undo
+  const handleUndo = () => {
+    if (deletedTrade) {
+      clearTimeout(deletedTrade.timeoutId);
+      // Re-add the trade
+      addTrade(deletedTrade.trade);
+      setDeletedTrade(null);
+    }
+  };
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (deletedTrade) {
+        clearTimeout(deletedTrade.timeoutId);
+      }
+    };
+  }, [deletedTrade]);
+
+  // Handle escape key to close fullscreen image
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && fullscreenImage) {
+        setFullscreenImage(null);
+      }
+    };
+    window.addEventListener('keydown', handleEscape);
+    return () => window.removeEventListener('keydown', handleEscape);
+  }, [fullscreenImage]);
+
+  // Save view mode preference
+  useEffect(() => {
+    localStorage.setItem('trade_log_view_mode', viewMode);
+  }, [viewMode]);
+
+  // Theme colors
+  const winColor = theme.primary;
+  const lossColor = theme.secondary;
+  const textPrimary = isLightTheme ? 'text-slate-800' : 'text-white';
+  const textSecondary = isLightTheme ? 'text-slate-600' : 'text-slate-400';
+  const cardBg = isLightTheme ? 'bg-white border border-slate-200' : '';
+
   return (
-      <div className="flex-1 h-full overflow-y-auto p-4 sm:p-6 lg:p-8 custom-scrollbar bg-slate-950">
-       <TradeWizard isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
-       
-       <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6 sm:mb-8">
+    <div
+      className="flex-1 h-full overflow-y-auto custom-scrollbar pb-20"
+      style={{ background: theme.bgGradient, backgroundSize: '400% 400%', animation: 'gradientShift 15s ease infinite' }}
+    >
+      <TradeWizard 
+        isOpen={isModalOpen && !isMultipleTradeMode} 
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingTrade(null);
+          setIsMultipleTradeMode(false);
+        }}
+        editingTrade={editingTrade}
+        isMultipleMode={false}
+      />
+      
+      <MultipleTradeWizard
+        isOpen={isModalOpen && isMultipleTradeMode}
+        onClose={() => {
+          setIsModalOpen(false);
+          setIsMultipleTradeMode(false);
+        }}
+        theme={theme}
+      />
+
+      <div className="px-4 pt-4 pb-6 max-w-lg mx-auto">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-white">Trade Journal</h1>
-            <p className="text-slate-500 text-xs sm:text-sm mt-1">Review your execution and refine your edge.</p>
+            <h1 className={`text-xl font-bold ${textPrimary}`}>Journal</h1>
+            <p className={`text-xs mt-0.5 ${textSecondary}`}>{filteredTrades.length} trades logged</p>
           </div>
-          <div className="flex flex-wrap gap-2 sm:gap-3 relative z-10">
+
+          <div className="flex items-center gap-2">
             {/* Account Filter */}
             <div className="relative">
-              <button 
+              <button
                 onClick={() => setShowAccountFilter(!showAccountFilter)}
-                className="flex items-center gap-2 bg-slate-900 border border-slate-800 text-slate-400 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium hover:text-white transition-colors"
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-medium transition-all ${isLightTheme
+                  ? 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                  : 'bg-slate-900/50 border text-slate-400 hover:text-white'
+                  }`}
+                style={{ borderColor: isLightTheme ? undefined : `${theme.primary}30` }}
               >
-                <Wallet size={16} />
-                <span className="hidden sm:inline">{selectedAccountFilter === 'all' ? 'All Accounts' : selectedFilterAccount?.name || 'Account'}</span>
-                <span className="sm:hidden">{selectedAccountFilter === 'all' ? 'All' : selectedFilterAccount?.name?.slice(0, 8) || 'Account'}</span>
-                <ChevronDown size={14} />
+                <Filter size={14} />
+                <span>{selectedAccountFilter === 'all' ? 'All' : selectedFilterAccount?.name?.slice(0, 6) || 'Acc'}</span>
               </button>
               {showAccountFilter && (
                 <>
                   <div className="fixed inset-0 z-30" onClick={() => setShowAccountFilter(false)} />
-                  <div className="absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-30 overflow-hidden max-h-64 overflow-y-auto">
+                  <div
+                    className={`absolute top-full right-0 mt-2 w-48 rounded-xl shadow-2xl z-40 overflow-hidden ${isLightTheme ? 'bg-white border border-slate-200' : 'bg-slate-900 border'
+                      }`}
+                    style={{ borderColor: isLightTheme ? undefined : `${theme.primary}30` }}
+                  >
                     <button
                       onClick={() => {
                         setSelectedAccountFilter('all');
                         setShowAccountFilter(false);
                       }}
-                      className={`w-full text-left px-4 py-3 text-sm hover:bg-slate-700 transition-colors ${
-                        selectedAccountFilter === 'all' ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
-                      }`}
+                      className={`w-full text-left px-4 py-3 text-sm transition-colors ${selectedAccountFilter === 'all' ? '' : isLightTheme ? 'text-slate-700' : 'text-slate-300'
+                        }`}
+                      style={{
+                        color: selectedAccountFilter === 'all' ? theme.primary : undefined,
+                        backgroundColor: selectedAccountFilter === 'all' ? `${theme.primary}10` : undefined
+                      }}
                     >
                       All Accounts
                     </button>
@@ -64,340 +1153,579 @@ const TradeLog = () => {
                           setSelectedAccountFilter(account.id);
                           setShowAccountFilter(false);
                         }}
-                        className={`w-full text-left px-4 py-3 text-sm hover:bg-slate-700 transition-colors flex items-center justify-between ${
-                          account.id === selectedAccountFilter ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
-                        }`}
+                        className={`w-full text-left px-4 py-3 text-sm transition-colors ${isLightTheme ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        style={{
+                          color: account.id === selectedAccountFilter ? theme.primary : undefined,
+                          backgroundColor: account.id === selectedAccountFilter ? `${theme.primary}10` : undefined
+                        }}
                       >
-                        <span>{account.name}</span>
-                        {account.isMain && <span className="text-[10px] uppercase text-slate-500">Main</span>}
+                        {account.name}
                       </button>
                     ))}
                   </div>
                 </>
               )}
             </div>
-            <button 
-                onClick={() => setIsModalOpen(true)}
-                className="bg-white text-slate-900 hover:bg-slate-200 px-4 py-2 rounded-lg text-sm font-bold shadow-lg shadow-white/5 transition-all flex items-center gap-2"
+
+            {/* View mode selector */}
+            {(activeTab === 'trades' || activeTab === 'screenshots') && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowViewModeMenu(!showViewModeMenu)}
+                  className={`p-2 rounded-xl transition-all ${isLightTheme ? 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300' : 'bg-slate-900/50 border text-slate-400 hover:text-white'}`}
+                  style={{
+                    borderColor: isLightTheme ? undefined : `${theme.primary}30`,
+                    color: !isLightTheme && (viewMode === 'list' ? theme.primary : undefined)
+                  }}
+                  title="Change view mode"
+                >
+                  <List size={16} />
+                </button>
+                {showViewModeMenu && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setShowViewModeMenu(false)} />
+                    <div
+                      className={`absolute top-full right-0 mt-2 w-40 rounded-xl shadow-2xl z-40 overflow-hidden ${isLightTheme ? 'bg-white border border-slate-200' : 'bg-slate-900 border'}`}
+                      style={{ borderColor: isLightTheme ? undefined : `${theme.primary}30` }}
+                    >
+                      <button
+                        onClick={() => {
+                          setViewMode('normal');
+                          setShowViewModeMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${isLightTheme ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-300 hover:bg-slate-800'}`}
+                        style={{
+                          color: viewMode === 'normal' ? theme.primary : undefined,
+                          backgroundColor: viewMode === 'normal' ? `${theme.primary}10` : undefined
+                        }}
+                      >
+                        Normal view
+                      </button>
+                      <button
+                        onClick={() => {
+                          setViewMode('list');
+                          setShowViewModeMenu(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-sm transition-colors ${isLightTheme ? 'text-slate-700 hover:bg-slate-50' : 'text-slate-300 hover:bg-slate-800'}`}
+                        style={{
+                          color: viewMode === 'list' ? theme.primary : undefined,
+                          backgroundColor: viewMode === 'list' ? `${theme.primary}10` : undefined
+                        }}
+                      >
+                        Detail view
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tab Selector */}
+        <div className="px-4 mb-4">
+          <div className="flex gap-2 p-1 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f1f5f9' : 'rgba(51,65,85,0.3)' }}>
+            <button
+              onClick={() => setActiveTab('trades')}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'trades'
+                  ? 'text-white shadow-md'
+                  : isLightTheme ? 'text-slate-600' : 'text-slate-400'
+              }`}
+              style={activeTab === 'trades' ? { backgroundColor: theme.primary } : {}}
             >
-                <Plus size={16} /> Add Trade
+              Trades
+            </button>
+            <button
+              onClick={() => setActiveTab('screenshots')}
+              className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'screenshots'
+                  ? 'text-white shadow-md'
+                  : isLightTheme ? 'text-slate-600' : 'text-slate-400'
+              }`}
+              style={activeTab === 'screenshots' ? { backgroundColor: theme.primary } : {}}
+            >
+              Screenshots
             </button>
           </div>
-       </div>
+          
+        </div>
 
-       <div className="glass-panel rounded-xl border border-slate-800 shadow-xl overflow-visible">
-           {filteredTrades.length === 0 ? (
-               <div className="p-12 text-center">
-                   <p className="text-slate-500 mb-4">
-                     {selectedAccountFilter === 'all' ? 'No trades logged yet.' : 'No trades found for this account.'}
-                   </p>
-                   <button onClick={() => setIsModalOpen(true)} className="text-brand-500 font-bold hover:underline">Log your first trade</button>
-               </div>
-           ) : (
-           <>
-           {/* Desktop Table View */}
-           <div className="hidden md:block overflow-x-auto">
-           <table className="w-full text-left border-collapse min-w-[700px]">
-               <thead>
-                   <tr className="bg-slate-900/50 border-b border-slate-800 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                       <th className="px-4 py-4">Status</th>
-                       <th className="px-4 py-4">Symbol</th>
-                       <th className="px-4 py-4">Session</th>
-                       <th className="px-4 py-4">Side</th>
-                       <th className="px-4 py-4 text-right">Net P&L</th>
-                       <th className="px-4 py-4 text-center">R:R</th>
-                       <th className="px-4 py-4">Account</th>
-                       <th className="px-4 py-4 text-right">Actions</th>
-                   </tr>
-               </thead>
-               <tbody className="divide-y divide-slate-800">
-                   {filteredTrades.map((trade) => {
-                       // Get main account as default if trade has no accountId
-                       const mainAccount = visibleAccounts.find(a => a.isMain);
-                       const tradeAccount = accounts.find(a => a.id === trade.accountId) || mainAccount;
-                       const effectiveAccountId = trade.accountId || mainAccount?.id;
-                       
-                       // Calculate R:R for display (works for both wins and losses)
-                       const hasRR = trade.riskAmount && trade.riskAmount > 0 && trade.tpAmount && trade.tpAmount > 0;
-                       const rrValue = hasRR ? trade.tpAmount! / trade.riskAmount! : null;
-                       
-                       return (
-                       <tr key={trade.id} className="hover:bg-slate-800/50 transition-colors group">
-                           <td className="px-4 py-4">
-                               <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${
-                                   trade.status === 'WIN' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                                   trade.status === 'LOSS' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' : 'bg-slate-700 text-slate-300 border-slate-600'
-                               }`}>
-                                   {trade.status}
-                               </span>
-                           </td>
-                           <td className="px-4 py-4">
-                               <div className="font-bold text-white">{trade.symbol}</div>
-                               <div className="text-xs text-slate-500">{trade.date}</div>
-                           </td>
-                           <td className="px-4 py-4 text-slate-400 text-sm">
-                               <div className="flex items-center gap-2">
-                                 <span className={`w-1.5 h-1.5 rounded-full ${trade.session === 'New York' ? 'bg-emerald-500' : trade.session === 'London' ? 'bg-indigo-500' : 'bg-slate-500'}`}></span>
-                                 {trade.session}
-                               </div>
-                           </td>
-                           <td className="px-4 py-4 text-sm">
-                               <span className={trade.side === 'LONG' ? 'text-emerald-400 font-bold' : 'text-rose-400 font-bold'}>
-                                   {trade.side}
-                               </span>
-                           </td>
-                           <td className={`px-4 py-4 text-right font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                               {trade.pnl >= 0 ? '+' : ''}${Math.abs(trade.pnl).toFixed(2)}
-                           </td>
-                           <td className="px-4 py-4 text-center">
-                               {rrValue ? (
-                                 <span className={`text-xs font-mono px-2 py-1 rounded ${
-                                   trade.status === 'WIN' 
-                                     ? 'text-brand-400 bg-brand-500/10' 
-                                     : 'text-slate-400 bg-slate-700/50'
-                                 }`} title={trade.status === 'LOSS' ? 'Potential R:R (if won)' : 'Achieved R:R'}>
-                                   1:{rrValue.toFixed(1)}
-                                   {trade.status === 'LOSS' && <span className="text-slate-500 ml-1">*</span>}
-                                 </span>
-                               ) : (
-                                 <span className="text-xs text-slate-600">-</span>
-                               )}
-                           </td>
-                           <td className="px-4 py-4">
-                               {visibleAccounts.length === 0 ? (
-                                 <span className="text-xs text-slate-600">-</span>
-                               ) : visibleAccounts.length === 1 ? (
-                                 <span className="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">
-                                   {visibleAccounts[0].name}
-                                 </span>
-                               ) : (
-                                 <div className="relative">
-                                   <button
-                                     onClick={() => setOpenAccountDropdownId(openAccountDropdownId === trade.id ? null : trade.id)}
-                                     className="text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded flex items-center gap-1 transition-colors"
-                                   >
-                                     <span>{tradeAccount?.name || mainAccount?.name || 'Select'}</span>
-                                     <ChevronDown size={12} />
-                                   </button>
-                                   {openAccountDropdownId === trade.id && (
-                                     <>
-                                       <div className="fixed inset-0 z-10" onClick={() => setOpenAccountDropdownId(null)} />
-                                       <div className="absolute top-full left-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 overflow-hidden">
-                                         {visibleAccounts.map(account => (
-                                           <button
-                                             key={account.id}
-                                             onClick={() => {
-                                               updateTrade(trade.id, { accountId: account.id });
-                                               setOpenAccountDropdownId(null);
-                                             }}
-                                             className={`w-full text-left px-3 py-2 text-xs hover:bg-slate-700 transition-colors flex items-center justify-between ${
-                                               account.id === effectiveAccountId ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
-                                             }`}
-                                           >
-                                             <span>{account.name}</span>
-                                             {account.isMain && <span className="text-[9px] uppercase text-slate-500">Main</span>}
-                                           </button>
-                                         ))}
-                                       </div>
-                                     </>
-                                   )}
-                                 </div>
-                               )}
-                           </td>
-                           <td className="px-4 py-4 text-right">
-                               <div className="flex items-center justify-end gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                                   <Link to="/tracking" className="text-slate-500 hover:text-brand-500 transition-colors">
-                                       <ArrowRight size={16} />
-                                   </Link>
-                                   <button onClick={() => deleteTrade(trade.id)} className="text-slate-500 hover:text-rose-500 transition-colors">
-                                       <Trash2 size={16} />
-                                   </button>
-                               </div>
-                           </td>
-                       </tr>
-                       );
-                   })}
-               </tbody>
-           </table>
-           </div>
+        {/* Content based on active tab */}
+        {activeTab === 'trades' ? (
+          /* Trades View */
+          filteredTrades.length === 0 ? (
+            <div
+              className={`p-8 text-center rounded-2xl ${cardBg}`}
+              style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+            >
+              <div
+                className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: `${theme.primary}15` }}
+              >
+                <TrendingUp size={28} style={{ color: theme.primary }} />
+              </div>
+              <p className={`mb-4 ${textSecondary}`}>No trades logged yet</p>
+              <button
+                onClick={() => setIsModalOpen(true)}
+                className="font-bold hover:underline"
+                style={{ color: theme.primary }}
+              >
+                Log your first trade
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(groupedTrades).map(([date, dayTrades]: [string, Trade[]]) => {
+                const dayPnL = getDayPnL(dayTrades);
 
-           {/* Mobile Card View */}
-           <div className="md:hidden divide-y divide-slate-800">
-               {filteredTrades.map((trade) => {
-                   const mainAccount = visibleAccounts.find(a => a.isMain);
-                   const tradeAccount = accounts.find(a => a.id === trade.accountId) || mainAccount;
-                   const effectiveAccountId = trade.accountId || mainAccount?.id;
-                   const hasRR = trade.riskAmount && trade.riskAmount > 0 && trade.tpAmount && trade.tpAmount > 0;
-                   const rrValue = hasRR ? trade.tpAmount! / trade.riskAmount! : null;
-                   const isExpanded = expandedTradeId === trade.id;
+                return (
+                  <div key={date}>
+                    {/* Date Header */}
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${textSecondary}`}>
+                        {formatDate(date)}
+                      </span>
+                      <span
+                        className="text-xs font-mono font-bold"
+                        style={{ color: dayPnL >= 0 ? winColor : lossColor }}
+                      >
+                        {dayPnL >= 0 ? '+' : ''}${dayPnL.toFixed(2)}
+                      </span>
+                    </div>
 
-                   return (
-                     <div key={trade.id} className="transition-colors">
-                       {/* Collapsed Summary Row - Tap to expand */}
-                       <button
-                         onClick={() => setExpandedTradeId(isExpanded ? null : trade.id)}
-                         className="w-full p-4 flex items-center justify-between hover:bg-slate-800/30 active:bg-slate-800/50 transition-colors text-left"
-                       >
-                         <div className="flex items-center gap-3">
-                           <span className={`inline-flex items-center px-2.5 py-1 rounded text-[11px] font-bold uppercase tracking-wide border ${
-                             trade.status === 'WIN' ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' :
-                             trade.status === 'LOSS' ? 'bg-rose-500/10 text-rose-500 border-rose-500/20' : 'bg-slate-700 text-slate-300 border-slate-600'
-                           }`}>
-                             {trade.status}
-                           </span>
-                           <div>
-                             <span className="font-bold text-white">{trade.symbol}</span>
-                             <span className={`ml-2 text-sm font-semibold ${trade.side === 'LONG' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                               {trade.side}
-                             </span>
-                           </div>
-                         </div>
-                         <div className="flex items-center gap-3">
-                           <span className={`font-mono font-bold ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                             {trade.pnl >= 0 ? '+' : ''}${Math.abs(trade.pnl).toFixed(2)}
-                           </span>
-                           {isExpanded ? (
-                             <ChevronUp size={18} className="text-slate-500" />
-                           ) : (
-                             <ChevronDown size={18} className="text-slate-500" />
-                           )}
-                         </div>
-                       </button>
+                    {/* Trades */}
+                    <div className={viewMode === 'list' ? 'space-y-0' : viewMode === 'compact' ? 'space-y-1.5' : 'space-y-2'}>
+                      {dayTrades.map((trade) => {
+                        const isExpanded = expandedTradeId === trade.id;
+                        const isProfit = trade.pnl >= 0;
+                        const isSwiped = swipedTradeId === trade.id;
 
-                       {/* Expanded Details */}
-                       {isExpanded && (
-                         <div className="px-4 pb-4 bg-slate-800/20 border-t border-slate-800/50">
-                           {/* Trade Details Grid */}
-                           <div className="grid grid-cols-2 gap-4 py-4">
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Date</span>
-                               <span className="text-sm text-white">{trade.date}</span>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Time</span>
-                               <span className="text-sm text-white">{trade.time || '-'}</span>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Session</span>
-                               <div className="flex items-center gap-1.5">
-                                 <span className={`w-2 h-2 rounded-full ${trade.session === 'New York' ? 'bg-emerald-500' : trade.session === 'London' ? 'bg-indigo-500' : trade.session === 'Asian' ? 'bg-amber-500' : 'bg-slate-500'}`}></span>
-                                 <span className="text-sm text-white">{trade.session}</span>
-                               </div>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">R:R</span>
-                               {rrValue ? (
-                                 <span className={`text-sm font-mono ${trade.status === 'WIN' ? 'text-brand-400' : 'text-slate-400'}`}>
-                                   1:{rrValue.toFixed(1)}
-                                 </span>
-                               ) : (
-                                 <span className="text-sm text-slate-500">-</span>
-                               )}
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Entry</span>
-                               <span className="text-sm text-white font-mono">{trade.entryPrice?.toFixed(5) || '-'}</span>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Exit</span>
-                               <span className="text-sm text-white font-mono">{trade.exitPrice?.toFixed(5) || '-'}</span>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Lots</span>
-                               <span className="text-sm text-white font-mono">{trade.lots?.toFixed(2) || '-'}</span>
-                             </div>
-                             <div>
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-1">Pips</span>
-                               <span className={`text-sm font-mono ${trade.pips >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                                 {trade.pips >= 0 ? '+' : ''}{trade.pips}
-                               </span>
-                             </div>
-                           </div>
+                        return (
+                          <SwipeableTradeItem
+                            key={trade.id}
+                            trade={trade}
+                            isExpanded={isExpanded}
+                            isProfit={isProfit}
+                            isSwiped={isSwiped}
+                            winColor={winColor}
+                            lossColor={lossColor}
+                            textPrimary={textPrimary}
+                            textSecondary={textSecondary}
+                            cardBg={cardBg}
+                            theme={theme}
+                            isLightTheme={isLightTheme}
+                            onToggleExpand={() => setExpandedTradeId(isExpanded ? null : trade.id)}
+                            onSwipeChange={(swiped) => setSwipedTradeId(swiped ? trade.id : null)}
+                            onEdit={() => {
+                              if (editingTradeId === trade.id) {
+                                setEditingTradeId(null);
+                              } else {
+                                setEditingTradeId(trade.id);
+                                setExpandedTradeId(trade.id);
+                              }
+                            }}
+                            onSave={(updatedTrade) => {
+                              const commission =
+                                updatedTrade.commission !== undefined
+                                  ? -Math.abs(updatedTrade.commission)
+                                  : trade.commission || 0;
 
-                           {/* Account Selector */}
-                           {visibleAccounts.length > 0 && (
-                             <div className="py-3 border-t border-slate-700/50">
-                               <span className="text-[10px] text-slate-500 uppercase tracking-wider block mb-2">Account</span>
-                               {visibleAccounts.length === 1 ? (
-                                 <span className="text-sm text-slate-300 bg-slate-800 px-3 py-1.5 rounded-lg inline-block">
-                                   {visibleAccounts[0].name}
-                                 </span>
-                               ) : (
-                                 <div className="relative inline-block">
-                                   <button
-                                     onClick={(e) => {
-                                       e.stopPropagation();
-                                       setOpenAccountDropdownId(openAccountDropdownId === trade.id ? null : trade.id);
-                                     }}
-                                     className="text-sm text-slate-300 bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg flex items-center gap-2 transition-colors"
-                                   >
-                                     <span>{tradeAccount?.name || mainAccount?.name || 'Select Account'}</span>
-                                     <ChevronDown size={14} />
-                                   </button>
-                                   {openAccountDropdownId === trade.id && (
-                                     <>
-                                       <div className="fixed inset-0 z-10" onClick={() => setOpenAccountDropdownId(null)} />
-                                       <div className="absolute top-full left-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-lg shadow-2xl z-20 overflow-hidden">
-                                         {visibleAccounts.map(account => (
-                                           <button
-                                             key={account.id}
-                                             onClick={(e) => {
-                                               e.stopPropagation();
-                                               updateTrade(trade.id, { accountId: account.id });
-                                               setOpenAccountDropdownId(null);
-                                             }}
-                                             className={`w-full text-left px-4 py-2.5 text-sm hover:bg-slate-700 transition-colors flex items-center justify-between ${
-                                               account.id === effectiveAccountId ? 'bg-brand-500/10 text-brand-400' : 'text-slate-300'
-                                             }`}
-                                           >
-                                             <span>{account.name}</span>
-                                             {account.isMain && <span className="text-[10px] uppercase text-slate-500">Main</span>}
-                                           </button>
-                                         ))}
-                                       </div>
-                                     </>
-                                   )}
-                                 </div>
-                               )}
-                             </div>
-                           )}
+                              const pnl = updatedTrade.pnl !== undefined ? updatedTrade.pnl : trade.pnl;
+                              const net = pnl + (commission || 0);
 
-                           {/* Action Buttons */}
-                           <div className="flex items-center gap-3 pt-3 border-t border-slate-700/50">
-                             <Link 
-                               to="/tracking" 
-                               className="flex-1 flex items-center justify-center gap-2 bg-brand-500/10 text-brand-400 hover:bg-brand-500/20 py-2.5 rounded-lg text-sm font-medium transition-colors"
-                             >
-                               <ArrowRight size={16} />
-                               View Details
-                             </Link>
-                             <button 
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 deleteTrade(trade.id);
-                                 setExpandedTradeId(null);
-                               }} 
-                               className="flex items-center justify-center gap-2 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors"
-                             >
-                               <Trash2 size={16} />
-                             </button>
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   );
-               })}
-           </div>
-           </>
-           )}
-           <div className="p-4 border-t border-slate-800 bg-slate-900/50 flex justify-between items-center">
-               <span className="text-xs text-slate-500">
-                 Showing {filteredTrades.length} trade{filteredTrades.length !== 1 ? 's' : ''}
-                 {selectedAccountFilter !== 'all' && ` for ${selectedFilterAccount?.name}`}
-               </span>
-               <button className="text-xs text-slate-500 hover:text-white transition-colors">Load more trades</button>
-           </div>
-       </div>
+                              updateTrade(trade.id, {
+                                ...updatedTrade,
+                                commission,
+                                status: net >= 0 ? TradeStatus.WIN : TradeStatus.LOSS
+                              });
+                              setEditingTradeId(null);
+                            }}
+                            isEditing={editingTradeId === trade.id}
+                            onDelete={() => handleDeleteTrade(trade.id)}
+                            onImageClick={(image) => setFullscreenImage(image)}
+                            viewMode={viewMode}
+                          />
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          /* Screenshots View */
+          filteredTrades.length === 0 ? (
+            <div
+              className={`p-8 text-center rounded-2xl ${cardBg}`}
+              style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+            >
+              <div
+                className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: `${theme.primary}15` }}
+              >
+                <Image size={28} style={{ color: theme.primary }} />
+              </div>
+              <p className={`mb-4 ${textSecondary}`}>No trades logged yet</p>
+              <p className={`text-xs ${textSecondary}`}>Add trades to see screenshots</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {Object.entries(groupedTrades).map(([date, dayTrades]: [string, Trade[]]) => (
+                  <div key={date}>
+                    {/* Date Header */}
+                    <div className="flex items-center justify-between mb-3 px-1">
+                      <span className={`text-xs font-semibold uppercase tracking-wider ${textSecondary}`}>
+                        {formatDate(date)}
+                      </span>
+                    </div>
+
+                    {/* Screenshot Trades */}
+                    <div className={viewMode === 'list' ? 'space-y-0' : viewMode === 'compact' ? 'space-y-1.5' : 'space-y-2'}>
+                      {dayTrades.map((trade) => {
+                        const isExpanded = expandedTradeId === trade.id;
+                        const isProfit = trade.pnl >= 0;
+                        const photos = trade.photos || (trade.photo ? [trade.photo] : []);
+
+                        return (
+                          <div
+                            key={trade.id}
+                            className={`rounded-2xl overflow-hidden ${cardBg}`}
+                            style={{
+                              backgroundColor: isLightTheme ? '#ffffff' : '#1e293b',
+                              border: `1px solid ${theme.primary}15`
+                            }}
+                          >
+                            {/* Header - Different layouts based on viewMode */}
+                            {viewMode === 'list' ? (
+                              <button
+                                onClick={() => setExpandedTradeId(isExpanded ? null : trade.id)}
+                                className="w-full px-3 py-2.5 flex items-center justify-between text-left border-b"
+                                style={{ borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.3)' }}
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <div
+                                    className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0"
+                                    style={{ backgroundColor: isProfit ? `${winColor}15` : `${lossColor}15` }}
+                                  >
+                                    <Image size={12} style={{ color: isProfit ? winColor : lossColor }} />
+                                  </div>
+                                  <span className={`font-bold text-sm ${textPrimary} truncate`}>{trade.symbol}</span>
+                                  <span
+                                    className="text-[9px] px-1 py-0.5 rounded font-medium flex-shrink-0"
+                                    style={{
+                                      backgroundColor: trade.side === 'LONG' ? `${winColor}15` : `${lossColor}15`,
+                                      color: trade.side === 'LONG' ? winColor : lossColor
+                                    }}
+                                  >
+                                    {trade.side}
+                                  </span>
+                                  <span className={`text-[10px] ${textSecondary} flex-shrink-0`}>
+                                    {photos.length} {photos.length === 1 ? 'screenshot' : 'screenshots'}
+                                  </span>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp size={14} className={textSecondary} />
+                                ) : (
+                                  <ChevronDown size={14} className={textSecondary} />
+                                )}
+                              </button>
+                            ) : viewMode === 'compact' ? (
+                              <button
+                                onClick={() => setExpandedTradeId(isExpanded ? null : trade.id)}
+                                className="w-full p-2.5 flex items-center justify-between text-left"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <div
+                                    className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                    style={{ backgroundColor: isProfit ? `${winColor}15` : `${lossColor}15` }}
+                                  >
+                                    <Image size={14} style={{ color: isProfit ? winColor : lossColor }} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className={`font-bold text-sm ${textPrimary}`}>{trade.symbol}</span>
+                                      <span
+                                        className="text-[9px] px-1 py-0.5 rounded font-medium"
+                                        style={{
+                                          backgroundColor: trade.side === 'LONG' ? `${winColor}15` : `${lossColor}15`,
+                                          color: trade.side === 'LONG' ? winColor : lossColor
+                                        }}
+                                      >
+                                        {trade.side}
+                                      </span>
+                                    </div>
+                                    <p className={`text-[9px] ${textSecondary}`}>
+                                      {photos.length} {photos.length === 1 ? 'screenshot' : 'screenshots'}
+                                    </p>
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp size={14} className={textSecondary} />
+                                ) : (
+                                  <ChevronDown size={14} className={textSecondary} />
+                                )}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setExpandedTradeId(isExpanded ? null : trade.id)}
+                                className="w-full p-4 flex items-center justify-between text-left"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                    style={{ backgroundColor: isProfit ? `${winColor}15` : `${lossColor}15` }}
+                                  >
+                                    <Image size={18} style={{ color: isProfit ? winColor : lossColor }} />
+                                  </div>
+                                  <div>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-bold ${textPrimary}`}>{trade.symbol}</span>
+                                      <span
+                                        className="text-[10px] px-1.5 py-0.5 rounded font-medium"
+                                        style={{
+                                          backgroundColor: trade.side === 'LONG' ? `${winColor}15` : `${lossColor}15`,
+                                          color: trade.side === 'LONG' ? winColor : lossColor
+                                        }}
+                                      >
+                                        {trade.side}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                      <p className={`text-[10px] ${textSecondary}`}>
+                                        {trade.time} • {trade.session}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <div className="text-right">
+                                    <p
+                                      className="font-mono font-bold text-xs"
+                                      style={{ color: isProfit ? winColor : lossColor }}
+                                    >
+                                      {isProfit ? '+' : ''}${trade.pnl.toFixed(2)}
+                                    </p>
+                                    <p className={`text-[10px] ${textSecondary}`}>
+                                      {photos.length > 0 ? `${photos.length} screenshot${photos.length !== 1 ? 's' : ''}` : 'No screenshots'}
+                                    </p>
+                                  </div>
+                                  {isExpanded ? (
+                                    <ChevronUp size={16} className={textSecondary} />
+                                  ) : (
+                                    <ChevronDown size={16} className={textSecondary} />
+                                  )}
+                                </div>
+                              </button>
+                            )}
+
+                            {/* Expanded Screenshots */}
+                            {isExpanded && (
+                              <div
+                                className="px-4 pb-4 pt-0 border-t"
+                                style={{
+                                  borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.3)'
+                                }}
+                              >
+                                <div className="mt-4 space-y-3">
+                                  {photos.length > 0 ? (
+                                    photos.map((photo, index) => (
+                                      <div key={index}>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setFullscreenImage(photo);
+                                          }}
+                                          className="w-full rounded-xl overflow-hidden border transition-all hover:opacity-90 active:scale-[0.98]"
+                                          style={{ borderColor: `${theme.primary}30` }}
+                                        >
+                                          <img
+                                            src={photo}
+                                            alt={`Trade screenshot ${index + 1}`}
+                                            className="w-full h-48 object-cover"
+                                          />
+                                        </button>
+                                        {photos.length > 1 && (
+                                          <p className={`text-[10px] mt-1 ${textSecondary} text-center`}>
+                                            Screenshot {index + 1}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))
+                                  ) : (
+                                    <div className="py-8 text-center border-2 border-dashed rounded-xl" style={{ borderColor: `${theme.primary}30` }}>
+                                      <Image size={32} className={`mx-auto mb-2 ${textSecondary}`} style={{ color: theme.primary }} />
+                                      <p className={`text-sm font-medium mb-1 ${textPrimary}`}>Attach Screenshot (max 2)</p>
+                                      <p className={`text-xs ${textSecondary}`}>Tap to add screenshot</p>
+                                      <p className={`text-[10px] mt-2 ${textSecondary}`}>Edit trade from Trades tab to add screenshots</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+        )}
+
+        {/* Add Trade Button */}
+        <div className="fixed bottom-28 right-4 z-40">
+          <button
+            onClick={() => {
+              if (visibleAccounts.length === 0) {
+                setShowAddAccountPrompt(true);
+              } else {
+                setShowTradeTypeSelector(true);
+              }
+            }}
+            className="w-14 h-14 rounded-2xl font-bold flex items-center justify-center transition-all text-white"
+            style={{
+              background: `linear-gradient(135deg, ${theme.primary} 0%, ${theme.primaryDark} 100%)`,
+              boxShadow: `0 0 30px ${theme.primary}50`
+            }}
+          >
+            <Plus size={24} strokeWidth={2.5} />
+          </button>
+          
+          <TradeTypeSelector
+            isOpen={showTradeTypeSelector}
+            onClose={() => setShowTradeTypeSelector(false)}
+            onSelectSingle={() => {
+              setShowTradeTypeSelector(false);
+              setIsMultipleTradeMode(false);
+              setIsModalOpen(true);
+            }}
+            onSelectMultiple={() => {
+              setShowTradeTypeSelector(false);
+              setIsMultipleTradeMode(true);
+              setIsModalOpen(true);
+            }}
+            theme={theme}
+            buttonPosition={{ top: 112, right: 16 }}
+          />
+        </div>
+
+        {/* Add Account Prompt Modal */}
+        {showAddAccountPrompt && (
+          <AccountCreationModal
+            isOpen={showAddAccountPrompt}
+            onClose={() => setShowAddAccountPrompt(false)}
+            onSuccess={() => {
+              setShowAddAccountPrompt(false);
+              setIsModalOpen(true);
+            }}
+            theme={theme}
+          />
+        )}
+      </div>
+
+      {/* Undo Toast */}
+      {deletedTrade && (
+        <div className="fixed bottom-24 right-4 z-50 animate-slide-up">
+          <div
+            className="bg-slate-900 border border-slate-700 rounded-xl p-4 shadow-2xl flex items-center gap-3 min-w-[280px]"
+            style={{ borderColor: theme.primary + '30' }}
+          >
+            <div
+              className="w-10 h-10 rounded-lg flex items-center justify-center"
+              style={{ backgroundColor: theme.secondary + '20' }}
+            >
+              <Trash2 size={18} style={{ color: theme.secondary }} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-bold text-white">Trade deleted</p>
+              <p className="text-xs text-slate-400">Tap to undo</p>
+            </div>
+            <button
+              onClick={handleUndo}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white rounded-lg text-sm font-bold transition-colors flex items-center gap-2"
+            >
+              <RotateCcw size={14} />
+              Undo
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <div
+            className={`w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden ${isLightTheme ? 'bg-white' : 'bg-slate-900'
+              }`}
+            style={{ border: `1px solid ${lossColor}30` }}
+          >
+            <div className="p-5">
+              <h3 className={`text-lg font-bold mb-2 ${textPrimary}`}>Delete Trade?</h3>
+              <p className={`text-sm ${textSecondary}`}>This action cannot be undone.</p>
+            </div>
+            <div
+              className="flex border-t"
+              style={{ borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
+            >
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className={`flex-1 py-4 text-sm font-medium transition-colors ${textSecondary}`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteTrade(deleteConfirmId);
+                }}
+                className="flex-1 py-4 text-sm font-bold transition-colors border-l"
+                style={{
+                  color: lossColor,
+                  borderColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Image Modal */}
+      {fullscreenImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+          onClick={() => setFullscreenImage(null)}
+        >
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setFullscreenImage(null);
+            }}
+            className="absolute top-4 right-4 p-3 bg-white/20 hover:bg-white/30 rounded-full transition-colors z-10 shadow-lg"
+            aria-label="Close image"
+          >
+            <X size={24} className="text-white" />
+          </button>
+          <div
+            className="absolute top-4 left-4 px-4 py-2 bg-black/50 hover:bg-black/70 rounded-lg transition-colors z-10 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setFullscreenImage(null);
+            }}
+          >
+            <span className="text-white text-sm font-medium">← Back</span>
+          </div>
+          <img
+            src={fullscreenImage}
+            alt="Trade screenshot fullscreen"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+        </div>
+      )}
     </div>
   );
 };

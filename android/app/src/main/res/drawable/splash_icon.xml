@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="120dp"
+    android:height="120dp"
+    android:viewportWidth="120"
+    android:viewportHeight="120">
+    
+    <!-- Candlestick Body (rounded rectangle) -->
+    <path
+        android:fillColor="#8b5cf6"
+        android:pathData="M48,42 L68,42 Q70,42 70,44 L70,78 Q70,80 68,80 L48,80 Q46,80 46,78 L46,44 Q46,42 48,42 Z" />
+    
+    <!-- Candlestick Wick Top -->
+    <path
+        android:fillColor="#8b5cf6"
+        android:pathData="M57.5,27 L62.5,27 Q63,27 63,27.5 L63,42 Q63,42.5 62.5,42.5 L57.5,42.5 Q57,42.5 57,42 L57,27.5 Q57,27 57.5,27 Z" />
+    
+    <!-- Candlestick Wick Bottom -->
+    <path
+        android:fillColor="#8b5cf6"
+        android:pathData="M57.5,78 L62.5,78 Q63,78 63,78.5 L63,99 Q63,99.5 62.5,99.5 L57.5,99.5 Q57,99.5 57,99 L57,78.5 Q57,78 57.5,78 Z" />
+    
+    <!-- Notebook/journal lines at bottom -->
+    <path
+        android:strokeColor="#8b5cf6"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.5"
+        android:pathData="M30,98 L90,98" />
+    <path
+        android:strokeColor="#8b5cf6"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.5"
+        android:pathData="M30,104 L90,104" />
+    <path
+        android:strokeColor="#8b5cf6"
+        android:strokeWidth="2"
+        android:strokeAlpha="0.5"
+        android:pathData="M30,110 L90,110" />
+</vector>
