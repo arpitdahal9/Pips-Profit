@@ -1,0 +1,3 @@
+# Netlify SPA redirect rule
+# All routes should serve index.html for React Router HashRouter
+/*    /index.html   200

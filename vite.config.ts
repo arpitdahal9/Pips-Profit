@@ -18,6 +18,23 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      }
+      },
+      build: {
+        outDir: 'dist',
+        assetsDir: 'assets',
+        sourcemap: false,
+        minify: 'esbuild',
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+              'chart-vendor': ['recharts'],
+              'ui-vendor': ['lucide-react'],
+            },
+          },
+        },
+        chunkSizeWarningLimit: 1000,
+      },
+      base: '/', // Change this to '/your-app-name/' if deploying to subdirectory
     };
 });

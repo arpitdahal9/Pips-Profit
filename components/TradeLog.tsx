@@ -30,6 +30,7 @@ const SwipeableTradeItem: React.FC<{
   onSave?: (updatedTrade: Partial<Trade>) => void;
   isEditing?: boolean;
   viewMode?: 'compact' | 'normal' | 'list';
+  strategies?: any[];
 }> = ({
   trade,
   isExpanded,
@@ -49,7 +50,8 @@ const SwipeableTradeItem: React.FC<{
   onImageClick,
   onSave,
   isEditing = false,
-  viewMode = 'normal'
+  viewMode = 'normal',
+  strategies = []
 }) => {
   const swipeRef = useRef<HTMLDivElement>(null);
   const startXRef = useRef<number>(0);
@@ -73,7 +75,8 @@ const SwipeableTradeItem: React.FC<{
     notes: trade?.notes || '',
     photos: trade?.photos || (trade?.photo ? [trade.photo] : []) as string[],
     date: trade?.date || '',
-    time: trade?.time || ''
+    time: trade?.time || '',
+    strategy: trade?.strategy || ''
   });
   
   // Initialize edit form when entering edit mode
@@ -101,7 +104,8 @@ const SwipeableTradeItem: React.FC<{
         notes: trade.notes || '',
         photos: trade.photos || (trade.photo ? [trade.photo] : []),
         date: trade.date || '',
-        time: trade.time || ''
+        time: trade.time || '',
+        strategy: trade.strategy || ''
       });
     }
   }, [isEditing, trade]);
@@ -517,6 +521,21 @@ const SwipeableTradeItem: React.FC<{
                   </div>
                 </div>
 
+                {/* Trade Setup */}
+                <div>
+                  <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Trade Setup</label>
+                  <select
+                    value={editForm.strategy}
+                    onChange={e => setEditForm({ ...editForm, strategy: e.target.value })}
+                    className={`w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:border-brand-500 outline-none ${isLightTheme ? 'bg-white text-slate-900' : 'text-white'}`}
+                  >
+                    <option value="">No trade setup</option>
+                    {strategies.map(s => (
+                      <option key={s.id} value={s.title}>{s.title}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Notes */}
                 <div>
                   <label className={`text-[10px] font-bold uppercase mb-1 block ${textSecondary}`}>Notes</label>
@@ -625,7 +644,8 @@ const SwipeableTradeItem: React.FC<{
                         photos: editForm.photos.length > 0 ? editForm.photos : undefined,
                         riskAmount,
                         tpAmount,
-                        riskRewardRatio
+                        riskRewardRatio,
+                        strategy: editForm.strategy || undefined
                       });
                     }}
                     className="flex-1 py-2.5 bg-brand-500 hover:bg-brand-600 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
@@ -956,7 +976,7 @@ const AccountCreationModal: React.FC<{
 };
 
 const TradeLog = () => {
-  const { trades, deleteTrade, updateTrade, addTrade, accounts } = useStore();
+  const { trades, deleteTrade, updateTrade, addTrade, accounts, strategies } = useStore();
   const { theme, isLightTheme } = useTheme();
   const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -1312,6 +1332,7 @@ const TradeLog = () => {
                             winColor={winColor}
                             lossColor={lossColor}
                             textPrimary={textPrimary}
+                            strategies={strategies}
                             textSecondary={textSecondary}
                             cardBg={cardBg}
                             theme={theme}

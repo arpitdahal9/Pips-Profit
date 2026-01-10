@@ -200,10 +200,6 @@ const CalendarPage: React.FC = () => {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h1 className={`text-xl font-bold ${textPrimary} flex items-center gap-2`}>
-              <CalendarIcon size={20} style={{ color: theme.primary }} />
-              Calendar
-            </h1>
           </div>
         </div>
 

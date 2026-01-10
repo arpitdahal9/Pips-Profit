@@ -12,7 +12,7 @@ const BottomNav: React.FC = () => {
     { path: '/', icon: LayoutDashboard, label: 'Home' },
     { path: '/trades', icon: BookOpen, label: 'Journal' },
     { path: '/calendar', icon: Calendar, label: 'Calendar' },
-    { path: '/trade-setup', icon: ListChecks, label: 'Strategy' },
+    { path: '/trade-setup', icon: ListChecks, label: 'Trade Setup' },
     { path: '/settings', icon: Wallet, label: 'Accounts' },
   ];
 

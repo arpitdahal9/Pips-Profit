@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ChevronRight, ChevronLeft, CheckCircle2, Wallet, ChevronDown, SkipForward, Calculator, TrendingUp, TrendingDown, AlertCircle, Calendar, Image, XCircle } from 'lucide-react';
+import { X, ChevronRight, ChevronLeft, CheckCircle2, Wallet, ChevronDown, SkipForward, Calculator, TrendingUp, TrendingDown, AlertCircle, Calendar, Image, XCircle, Plus } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Trade, TradeStatus, TradingSession } from '../types';
 
@@ -245,7 +245,7 @@ const calculateRR = (
 };
 
 const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade, isMultipleMode = false }) => {
-  const { addTrade, updateTrade, accounts, strategies } = useStore();
+  const { addTrade, updateTrade, accounts, strategies, addStrategy } = useStore();
   const navigate = useNavigate();
   
   // Main wizard step
@@ -264,6 +264,11 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
   
   // Collapsible fields state
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
+  
+  // Create Trade Setup modal state
+  const [showCreateStrategyModal, setShowCreateStrategyModal] = useState(false);
+  const [newStrategyTitle, setNewStrategyTitle] = useState('');
+  const [newStrategyItems, setNewStrategyItems] = useState<string[]>(['']);
   
   const visibleAccounts = useMemo(() => accounts.filter(a => !a.isHidden), [accounts]);
   
@@ -550,6 +555,49 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
   const getDetailStepNumber = () => {
     const steps: DetailStep[] = ['strategy', 'planDiscipline', 'session', 'emotion', 'mistakes', 'notes'];
     return steps.indexOf(detailStep) + 1;
+  };
+
+  // Handle creating a new trade setup from within the wizard
+  const handleCreateStrategy = () => {
+    if (!newStrategyTitle.trim()) return;
+
+    const items = newStrategyItems
+      .filter(item => item.trim() !== '')
+      .map((text, idx) => ({
+        id: `item_${Date.now()}_${idx}`,
+        text: text.trim(),
+        checked: false
+      }));
+
+    const newStrategy = {
+      id: `strategy_${Date.now()}`,
+      title: newStrategyTitle.trim(),
+      symbol: 'GENERAL',
+      items
+    };
+
+    addStrategy(newStrategy);
+    
+    // Automatically select the newly created strategy and advance
+    setDetailData({ ...detailData, strategy: newStrategy.title });
+    setShowCreateStrategyModal(false);
+    setNewStrategyTitle('');
+    setNewStrategyItems(['']);
+    advanceDetailStep();
+  };
+
+  const handleAddStrategyItem = () => {
+    setNewStrategyItems([...newStrategyItems, '']);
+  };
+
+  const handleStrategyItemChange = (index: number, value: string) => {
+    const newItems = [...newStrategyItems];
+    newItems[index] = value;
+    setNewStrategyItems(newItems);
+  };
+
+  const handleRemoveStrategyItem = (index: number) => {
+    setNewStrategyItems(newStrategyItems.filter((_, i) => i !== index));
   };
 
   // Toggle emotion (max 3, auto-advance when 1+ selected)
@@ -902,26 +950,39 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
       case 'strategy':
         return (
           <div className="p-5">
-            <h3 className="text-lg font-bold text-white mb-2">What strategy did you use?</h3>
+            <h3 className="text-lg font-bold text-white mb-2">What trade setup did you use?</h3>
             <p className="text-slate-400 text-sm mb-4">Tap to select</p>
             <div className="space-y-2">
               {strategies.length > 0 ? (
-                strategies.map(s => (
+                <>
+                  {strategies.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        setDetailData({ ...detailData, strategy: s.title });
+                        advanceDetailStep();
+                      }}
+                      className={`w-full p-3 rounded-xl text-left transition-all ${
+                        detailData.strategy === s.title
+                          ? 'bg-brand-500/20 border-2 border-brand-500 text-brand-400'
+                          : 'bg-slate-800 border-2 border-transparent text-slate-300 hover:border-slate-600'
+                      }`}
+                    >
+                      {s.title}
+                    </button>
+                  ))}
                   <button
-                    key={s.id}
                     onClick={() => {
-                      setDetailData({ ...detailData, strategy: s.title });
-                      advanceDetailStep();
+                      setShowCreateStrategyModal(true);
+                      setNewStrategyTitle('');
+                      setNewStrategyItems(['']);
                     }}
-                    className={`w-full p-3 rounded-xl text-left transition-all ${
-                      detailData.strategy === s.title
-                        ? 'bg-brand-500/20 border-2 border-brand-500 text-brand-400'
-                        : 'bg-slate-800 border-2 border-transparent text-slate-300 hover:border-slate-600'
-                    }`}
+                    className="w-full p-3 rounded-xl text-left transition-all border-2 border-dashed border-brand-500/50 text-brand-400 hover:border-brand-500 hover:bg-brand-500/10 flex items-center justify-center gap-2"
                   >
-                    {s.title}
+                    <Plus size={16} />
+                    New Trade Setup
                   </button>
-                ))
+                </>
               ) : (
                 <div className="space-y-3">
                   <p className="text-slate-500 text-sm p-3 bg-slate-800/50 rounded-xl">
@@ -929,8 +990,9 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   </p>
                   <button
                     onClick={() => {
-                      onClose();
-                      navigate('/trade-setup');
+                      setShowCreateStrategyModal(true);
+                      setNewStrategyTitle('');
+                      setNewStrategyItems(['']);
                     }}
                     className="w-full py-3 rounded-xl text-sm font-semibold text-slate-900 bg-brand-500 hover:bg-brand-600 transition-colors"
                   >
@@ -1221,6 +1283,99 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 setShowCalendar(false);
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Create Trade Setup Modal */}
+      {showCreateStrategyModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4">
+          <div
+            className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl p-6 max-h-[90vh] overflow-y-auto"
+            style={{ borderColor: '#8b5cf6' + '30' }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">Create Trade Setup</h3>
+              <button
+                onClick={() => {
+                  setShowCreateStrategyModal(false);
+                  setNewStrategyTitle('');
+                  setNewStrategyItems(['']);
+                }}
+                className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 mb-1.5 block">Trade Setup Name *</label>
+                <input
+                  type="text"
+                  value={newStrategyTitle}
+                  onChange={(e) => setNewStrategyTitle(e.target.value)}
+                  placeholder="e.g., London Breakout"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+                  autoFocus
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-400">Checklist Items (Optional)</label>
+                  <button
+                    onClick={handleAddStrategyItem}
+                    className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                  >
+                    <Plus size={14} />
+                    Add Item
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {newStrategyItems.map((item, index) => (
+                    <div key={index} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={item}
+                        onChange={(e) => handleStrategyItemChange(index, e.target.value)}
+                        placeholder="e.g., Sweep of Asian High"
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                      />
+                      {newStrategyItems.length > 1 && (
+                        <button
+                          onClick={() => handleRemoveStrategyItem(index)}
+                          className="p-2 text-rose-400 hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                          <X size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button
+                  onClick={handleCreateStrategy}
+                  disabled={!newStrategyTitle.trim()}
+                  className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 size={18} />
+                  Create & Select
+                </button>
+                <button
+                  onClick={() => {
+                    setShowCreateStrategyModal(false);
+                    setNewStrategyTitle('');
+                    setNewStrategyItems(['']);
+                  }}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

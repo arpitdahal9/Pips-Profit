@@ -13,12 +13,22 @@ import { ThemeProvider, useTheme } from './context/ThemeContext';
 
 // Capacitor Status Bar (only runs on native)
 const initStatusBar = async (color: string) => {
+  // Check if Capacitor is available and we're on native platform
+  const isNative = typeof (window as any).Capacitor !== 'undefined' && 
+                   (window as any).Capacitor.isNativePlatform && 
+                   (window as any).Capacitor.isNativePlatform();
+  
+  if (!isNative) {
+    return; // Skip on web
+  }
+
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color });
   } catch (e) {
-    // Not running on native platform
+    // Not running on native platform or StatusBar not available
+    console.debug('StatusBar not available on this platform');
   }
 };
 

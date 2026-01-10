@@ -31,18 +31,31 @@ const TradeSetup: React.FC = () => {
         ? (strategyWins / strategyTrades.length) * 100 
         : 0;
       
-      // Calculate Risk:Reward ratio (average)
-      const rrTrades = strategyTrades.filter(t => t.riskRewardRatio);
-      const avgRR = rrTrades.length > 0
-        ? rrTrades.reduce((sum, t) => sum + (t.riskRewardRatio || 0), 0) / rrTrades.length
-        : 0;
+      // Calculate Max Drawdown
+      let maxDrawdown = 0;
+      if (strategyTrades.length > 0) {
+        let peak = 0;
+        let runningBalance = 0;
+        const sortedTrades = [...strategyTrades].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        sortedTrades.forEach(trade => {
+          runningBalance += trade.pnl;
+          if (runningBalance > peak) {
+            peak = runningBalance;
+          }
+          const drawdown = peak - runningBalance;
+          if (drawdown > maxDrawdown) {
+            maxDrawdown = drawdown;
+          }
+        });
+      }
 
       return {
         strategy,
         trades: strategyTrades.length,
         winRate: strategyWinRate,
         pnl: strategyPnl,
-        riskReward: avgRR
+        maxDrawdown
       };
     });
   }, [strategies, trades]);
@@ -129,14 +142,14 @@ const TradeSetup: React.FC = () => {
             className="flex items-center gap-2 px-4 py-2.5 bg-brand-500 hover:bg-brand-600 text-slate-900 rounded-xl font-bold transition-colors"
           >
             <Plus size={18} />
-            New Strategy
+            New Trade Setup
           </button>
         </div>
 
         {/* Strategy List */}
         {strategyStats.length > 0 ? (
           <div className="space-y-4">
-            {strategyStats.map(({ strategy, trades, winRate, pnl, riskReward }) => {
+            {strategyStats.map(({ strategy, trades, winRate, pnl, maxDrawdown }) => {
               const isExpanded = expandedStrategyId === strategy.id;
 
               return (
@@ -159,7 +172,7 @@ const TradeSetup: React.FC = () => {
                                 <th className={`text-left py-2 px-3 ${textSecondary} font-semibold`}>Trades</th>
                                 <th className={`text-left py-2 px-3 ${textSecondary} font-semibold`}>WinRate</th>
                                 <th className={`text-left py-2 px-3 ${textSecondary} font-semibold`}>P&L</th>
-                                <th className={`text-left py-2 px-3 ${textSecondary} font-semibold`}>Risk:Reward</th>
+                                <th className={`text-left py-2 px-3 ${textSecondary} font-semibold`}>Max Drawdown</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -171,8 +184,8 @@ const TradeSetup: React.FC = () => {
                                 <td className={`py-2 px-3 font-mono font-medium ${pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                                   {pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}
                                 </td>
-                                <td className={`py-2 px-3 ${textPrimary} font-medium`}>
-                                  {riskReward > 0 ? `1:${riskReward.toFixed(2)}` : '-'}
+                                <td className={`py-2 px-3 font-mono font-medium ${textPrimary}`}>
+                                  ${maxDrawdown.toFixed(2)}
                                 </td>
                               </tr>
                             </tbody>
@@ -278,7 +291,7 @@ const TradeSetup: React.FC = () => {
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-bold text-white">
-                  {editingStrategy ? 'Edit Strategy' : 'Create Strategy'}
+                  {editingStrategy ? 'Edit Trade Setup' : 'Create Trade Setup'}
                 </h3>
                 <button
                   onClick={() => setIsStrategyModalOpen(false)}
