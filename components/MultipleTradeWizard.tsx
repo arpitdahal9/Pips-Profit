@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { X, Plus, Wallet, Calendar, Trash2, ChevronRight, ChevronLeft, CheckCircle2, ChevronDown, Image, XCircle, Calculator, TrendingUp, TrendingDown, AlertCircle } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { Trade, TradeStatus, TradingSession } from '../types';
+import { readImageFileAsDataUrl } from '../utils/imageProcessing';
 
 type WizardStep = 'entry' | 'details';
 type DetailStep = 'strategy' | 'planDiscipline' | 'session' | 'emotion' | 'mistakes' | 'notes';
@@ -119,6 +120,7 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
   const [manualPnL, setManualPnL] = useState(false);
+  const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
 
   // Entry data (same structure as single trade)
   const [entryData, setEntryData] = useState({
@@ -551,10 +553,15 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
             ) : (
               <button
                 onClick={() => imageUploadRef.current?.click()}
-                className="w-full py-3 border-2 border-dashed border-slate-700 hover:border-brand-500 rounded-xl flex flex-col items-center justify-center gap-2 transition-colors"
+                disabled={isProcessingPhoto}
+                className={`w-full py-3 border-2 border-dashed rounded-xl flex flex-col items-center justify-center gap-2 transition-colors ${
+                  isProcessingPhoto ? 'border-slate-600 cursor-not-allowed opacity-70' : 'border-slate-700 hover:border-brand-500'
+                }`}
               >
                 <Image size={24} className="text-slate-400" />
-                <span className="text-sm text-slate-400">Tap to add screenshot</span>
+                <span className="text-sm text-slate-400">
+                  {isProcessingPhoto ? 'Processing image...' : 'Tap to add screenshot'}
+                </span>
               </button>
             )}
             
@@ -563,29 +570,31 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (file) {
                   if (!file.type.startsWith('image/')) {
                     alert('Please select an image file');
+                    if (imageUploadRef.current) imageUploadRef.current.value = '';
                     return;
                   }
                   if (file.size > 5 * 1024 * 1024) {
                     alert('Image size must be less than 5MB');
+                    if (imageUploadRef.current) imageUploadRef.current.value = '';
                     return;
                   }
-                  const reader = new FileReader();
-                  reader.onload = (event) => {
-                    const result = event.target?.result as string;
+                  try {
+                    setIsProcessingPhoto(true);
+                    const result = await readImageFileAsDataUrl(file);
                     if (result) {
-                      setDetailData({ ...detailData, photo: result });
+                      setDetailData(prev => ({ ...prev, photo: result }));
                     }
-                  };
-                  reader.onerror = () => {
-                    alert('Failed to read image file');
-                  };
-                  reader.readAsDataURL(file);
-                  if (imageUploadRef.current) imageUploadRef.current.value = '';
+                  } catch (error) {
+                    alert('Failed to process image');
+                  } finally {
+                    setIsProcessingPhoto(false);
+                    if (imageUploadRef.current) imageUploadRef.current.value = '';
+                  }
                 }
               }}
             />
@@ -1033,7 +1042,7 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 overflow-y-auto">
       <div
         className="bg-slate-900 border border-slate-800 w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90vh]"
         style={{ borderColor: theme.primary + '30' }}

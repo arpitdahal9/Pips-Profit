@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor-community/image-manipulator": "^7.0.0",
     "@capacitor-firebase/authentication": "^7.0.0",
     "@capacitor/android": "^7.4.4",
     "@capacitor/cli": "^7.4.4",
@@ -21,6 +22,7 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "6.22.3",
+    "react-window": "^2.2.5",
     "recharts": "2.12.2"
   },
   "devDependencies": {

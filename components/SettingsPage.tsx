@@ -1,8 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { User, Wallet, Download, Upload, Camera, Edit2, Trash2, Plus, Eye, EyeOff, Palette, Check, Heart, X, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useState, useRef, useMemo } from 'react';
+import { User, Wallet, Download, Upload, Camera, Edit2, Trash2, Plus, Eye, EyeOff, Palette, Check, Heart, X, ChevronDown, ChevronUp, MessageSquare, Cloud, Coffee } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useTheme, THEMES, ThemeId } from '../context/ThemeContext';
 import { TradingAccount } from '../types';
+import { logoutUser } from '../src/authService';
+import { useAuthModal } from '../context/AuthModalContext';
 
 // Avatar options
 const AVATAR_OPTIONS = [
@@ -16,10 +18,14 @@ const AVATAR_OPTIONS = [
   { id: 'avatar8', url: 'https://api.dicebear.com/7.x/fun-emoji/svg?seed=Happy&backgroundColor=8b5cf6' },
 ];
 
+const FEATURE_REQUEST_ENDPOINT = 'https://formspree.io/f/xreeojqb';
+
 const SettingsPage: React.FC = () => {
+  const { openAuthModal } = useAuthModal();
   const { 
     user, updateUser, accounts, addAccount, updateAccount, deleteAccount, 
-    getAccountBalance, trades, settings, 
+    getAccountBalance, trades, settings,
+    cloudUser, syncStatus, isMigrating, forceSyncNow, syncToast,
     exportData, importData 
   } = useStore();
   const { theme, themeId, setTheme, isLightTheme } = useTheme();
@@ -36,6 +42,11 @@ const SettingsPage: React.FC = () => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const avatarUploadRef = useRef<HTMLInputElement>(null);
   const [showCommunityThanks, setShowCommunityThanks] = useState(false);
+  const [showFeatureRequest, setShowFeatureRequest] = useState(false);
+  const [featureEmail, setFeatureEmail] = useState('');
+  const [featureMessage, setFeatureMessage] = useState('');
+  const [featureStatus, setFeatureStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [isSubmittingFeature, setIsSubmittingFeature] = useState(false);
   const [isAccountsExpanded, setIsAccountsExpanded] = useState(true);
   const [isThemeExpanded, setIsThemeExpanded] = useState(true);
   const [isBackupExpanded, setIsBackupExpanded] = useState(true);
@@ -137,6 +148,40 @@ const SettingsPage: React.FC = () => {
     }
   };
 
+  const handleSubmitFeatureRequest = async () => {
+    if (!featureMessage.trim()) {
+      setFeatureStatus({ type: 'error', message: 'Please enter your feature request.' });
+      setTimeout(() => setFeatureStatus(null), 4000);
+      return;
+    }
+
+    try {
+      setIsSubmittingFeature(true);
+      const response = await fetch(FEATURE_REQUEST_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({
+          email: featureEmail || undefined,
+          message: featureMessage.trim(),
+          name: user?.name || undefined,
+          source: 'in-app-feature-request'
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Submission failed');
+      }
+
+      setFeatureStatus({ type: 'success', message: 'Thanks! Your request has been submitted.' });
+      setFeatureMessage('');
+    } catch (error) {
+      setFeatureStatus({ type: 'error', message: 'Submission failed. Please try again.' });
+    } finally {
+      setIsSubmittingFeature(false);
+      setTimeout(() => setFeatureStatus(null), 5000);
+    }
+  };
+
   // Calculate user stats for profile
   const userStats = {
     totalTrades: trades.length,
@@ -144,6 +189,39 @@ const SettingsPage: React.FC = () => {
     memberSince: user?.createdAt ? new Date(user.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : 'N/A',
     winRate: trades.length > 0 ? (trades.filter(t => t.pnl > 0).length / trades.length * 100).toFixed(0) : '0',
   };
+
+  const mostCommonValue = (items: string[]) => {
+    if (items.length === 0) return null;
+    const counts = items.reduce<Record<string, number>>((acc, item) => {
+      acc[item] = (acc[item] || 0) + 1;
+      return acc;
+    }, {});
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+  };
+
+  const strongestPair = useMemo(() => {
+    const symbols = trades.map(t => t.symbol).filter(Boolean);
+    return mostCommonValue(symbols) || 'N/A';
+  }, [trades]);
+
+  const bestTradePnl = useMemo(() => {
+    if (trades.length === 0) return 'N/A';
+    const maxPnl = Math.max(...trades.map(t => t.pnl));
+    return `$${maxPnl.toFixed(2)}`;
+  }, [trades]);
+
+  const psychologyStrength = useMemo(() => {
+    const emotions = trades.flatMap(t => {
+      if (!t.emotion) return [];
+      return t.emotion.split(',').map(item => item.trim()).filter(Boolean);
+    });
+    return mostCommonValue(emotions) || 'No data yet';
+  }, [trades]);
+
+  const psychologyWeakness = useMemo(() => {
+    const mistakes = trades.flatMap(t => t.mistakes || []);
+    return mostCommonValue(mistakes) || 'No data yet';
+  }, [trades]);
 
   return (
     <div 
@@ -175,7 +253,7 @@ const SettingsPage: React.FC = () => {
             }`}
             style={activeTab === 'theme' ? { backgroundColor: theme.primary } : {}}
           >
-            Theme
+            Theme & Support
           </button>
         </div>
 
@@ -183,12 +261,12 @@ const SettingsPage: React.FC = () => {
         <>
         {/* Profile Pic & Stats Header */}
         <div className={`p-6 rounded-2xl mb-6 ${cardBg}`} style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}>
-          <div className="flex items-center gap-4 mb-6">
+          <div className="flex flex-col items-center text-center">
             <div className="relative">
               <img
                 src={user?.avatarUrl || AVATAR_OPTIONS[0].url}
                 alt="Avatar"
-                className="w-20 h-20 rounded-2xl object-cover"
+                className="w-24 h-24 rounded-2xl object-cover"
                 style={{ border: `2px solid ${theme.primary}` }}
               />
               <button
@@ -199,7 +277,7 @@ const SettingsPage: React.FC = () => {
                 <Camera size={14} />
               </button>
             </div>
-            <div className="flex-1">
+            <div className="mt-3">
               {editingName ? (
                 <input
                   type="text"
@@ -215,7 +293,7 @@ const SettingsPage: React.FC = () => {
                   autoFocus
                 />
               ) : (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center gap-2">
                   <h2 className={`text-xl font-bold ${textPrimary}`}>{user?.name || 'Trader'}</h2>
                   <button 
                     onClick={() => setEditingName(true)} 
@@ -226,24 +304,129 @@ const SettingsPage: React.FC = () => {
                   </button>
                 </div>
               )}
+              <p className={`text-[10px] uppercase mt-1 ${textSecondary}`}>Profile</p>
             </div>
           </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="text-center">
-              <p className={`text-2xl font-bold font-mono ${textPrimary}`}>{userStats.totalTrades}</p>
-              <p className={`text-[10px] uppercase ${textSecondary}`}>Trades</p>
+          <div className="mt-5">
+            <div className="grid grid-cols-3 text-center text-[10px] uppercase gap-2">
+              <span className={textSecondary}>Trades</span>
+              <span className={textSecondary}>Win Rate</span>
+              <span className={textSecondary}>Accounts</span>
             </div>
-            <div className="text-center">
-              <p className="text-2xl font-bold font-mono" style={{ color: theme.primary }}>{userStats.winRate}%</p>
-              <p className={`text-[10px] uppercase ${textSecondary}`}>Win Rate</p>
-            </div>
-            <div className="text-center">
-              <p className={`text-2xl font-bold font-mono ${textPrimary}`}>{userStats.totalAccounts}</p>
-              <p className={`text-[10px] uppercase ${textSecondary}`}>Accounts</p>
+            <div className="grid grid-cols-3 text-center mt-1 gap-2">
+              <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalTrades}</span>
+              <span className="text-lg font-bold font-mono" style={{ color: theme.primary }}>{userStats.winRate}%</span>
+              <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalAccounts}</span>
             </div>
           </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-5">
+            <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+              <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strongest Pair</p>
+              <p className={`text-sm font-semibold ${textPrimary}`}>{strongestPair}</p>
+            </div>
+            <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+              <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>All time high record</p>
+              <p className={`text-sm font-semibold ${textPrimary}`}>{bestTradePnl}</p>
+            </div>
+          </div>
+
+          <div className="mt-4">
+            <p className={`text-sm font-semibold mb-2 ${textPrimary}`}>Psychology</p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strength</p>
+                <p className={`text-xs ${textPrimary}`}>{psychologyStrength}</p>
+              </div>
+              <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Weakness</p>
+                <p className={`text-xs ${textPrimary}`}>{psychologyWeakness}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Cloud Sync */}
+        <div
+          className={`p-5 rounded-2xl mb-6 ${cardBg}`}
+          style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+        >
+          <div className="flex items-center gap-3 mb-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${theme.primary}20` }}
+            >
+              <Cloud size={18} style={{ color: theme.primary }} />
+            </div>
+            <div className="flex-1">
+              <h3 className={`font-bold ${textPrimary}`}>Cloud Sync</h3>
+              <p className={`text-xs ${textSecondary}`}>
+                {cloudUser ? 'Sync enabled for this account' : 'Offline only for now'}
+              </p>
+            </div>
+            <span
+              className={`text-[10px] uppercase px-2 py-1 rounded-full font-semibold ${
+                syncStatus === 'synced'
+                  ? 'text-emerald-500 bg-emerald-500/10'
+                  : syncStatus === 'syncing'
+                    ? 'text-amber-500 bg-amber-500/10'
+                    : 'text-slate-400 bg-slate-400/10'
+              }`}
+            >
+              {syncStatus === 'synced' ? 'Backed up & synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline only'}
+            </span>
+          </div>
+
+          {!cloudUser && (
+            <p className={`text-xs mb-3 ${textSecondary}`}>
+              Offline only (not backed up). 🔒 Sign in to back up your trades across devices.
+            </p>
+          )}
+
+          {isMigrating && (
+            <p className={`text-xs mb-3 ${textSecondary}`}>Backing up your trades...</p>
+          )}
+
+          {cloudUser ? (
+            <div className="space-y-3">
+              <p className={`text-xs ${textSecondary}`}>{cloudUser.email || 'Signed in'}</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={async () => {
+                    try {
+                      await forceSyncNow();
+                    } catch (error) {
+                      // Sync toast handled in StoreContext
+                    }
+                  }}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  Force sync now
+                </button>
+                <button
+                  onClick={() => logoutUser()}
+                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  Sign Out
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={openAuthModal}
+              className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+              style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+            >
+              Sign In / Sign Up
+            </button>
+          )}
+
+          {syncToast && (
+            <p className={`text-xs mt-3 ${textSecondary}`}>{syncToast === 'Sync complete' ? 'Sync complete ✅' : syncToast}</p>
+          )}
         </div>
 
         {/* Accounts Section */}
@@ -274,12 +457,6 @@ const SettingsPage: React.FC = () => {
                 </div>
                 <p className={`font-medium mb-2 ${textPrimary}`}>No accounts yet</p>
                 <p className={`text-xs mb-4 ${textSecondary}`}>Add your first trading account</p>
-                <div 
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold"
-                  style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}
-                >
-                  ⚡ Earn +75 XP
-                </div>
               </div>
             ) : (
               accounts.map(account => (
@@ -471,17 +648,47 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Request a Feature Button - Accounts Tab */}
+        <button
+          onClick={() => setShowFeatureRequest(true)}
+          className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2 mb-6"
+          style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+        >
+          <MessageSquare size={18} /> Request a Feature
+        </button>
+
+        {/* Community Thanks Section - Accounts Tab */}
+        <div 
+          className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
+          style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+          onClick={() => setShowCommunityThanks(true)}
+        >
+          <div className="flex items-center gap-3">
+            <div 
+              className="w-10 h-10 rounded-xl flex items-center justify-center"
+              style={{ backgroundColor: `${theme.primary}20` }}
+            >
+              <Heart size={18} style={{ color: theme.primary }} />
+            </div>
+            <div className="flex-1">
+              <h3 className={`font-bold ${textPrimary}`}>Thanks for Community Feedback</h3>
+              <p className={`text-xs ${textSecondary}`}>Tap to see contributors</p>
+            </div>
+          </div>
+        </div>
+
         {/* Theme Section */}
         </>
         )}
 
         {activeTab === 'theme' && (
+        <>
         <div className="mb-6">
           <button
             onClick={() => setIsThemeExpanded(!isThemeExpanded)}
             className="w-full flex items-center justify-between mb-4"
           >
-            <h2 className={`text-lg font-bold ${textPrimary}`}>Theme</h2>
+            <h2 className={`text-lg font-bold ${textPrimary}`}>Theme & Support</h2>
             {isThemeExpanded ? (
               <ChevronUp size={20} className={textSecondary} />
             ) : (
@@ -576,7 +783,6 @@ const SettingsPage: React.FC = () => {
             </div>
           )}
         </div>
-        )}
 
         {/* Backup Section */}
         <div className="mb-6">
@@ -666,6 +872,15 @@ const SettingsPage: React.FC = () => {
           )}
         </div>
 
+        {/* Request a Feature Button */}
+        <button
+          onClick={() => setShowFeatureRequest(true)}
+          className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+          style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+        >
+          <MessageSquare size={18} /> Request a Feature
+        </button>
+
         {/* Community Thanks Section */}
         <div 
           className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
@@ -685,7 +900,96 @@ const SettingsPage: React.FC = () => {
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
+
+      {/* Feature Request Modal */}
+      {showFeatureRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              background: isLightTheme ? 'white' : theme.cardBg,
+              border: `1px solid ${theme.primary}30`
+            }}
+          >
+            <div
+              className="p-5"
+              style={{ borderBottom: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-lg font-bold ${textPrimary}`}>Request a Feature</h3>
+                <button
+                  onClick={() => setShowFeatureRequest(false)}
+                  className={`p-1 hover:bg-slate-800 rounded-lg transition-colors ${textSecondary}`}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <p className={`text-sm ${textSecondary}`}>Tell us what you want next and we will review it.</p>
+            </div>
+            <div className="p-5 space-y-3">
+              <a
+                href="https://paypal.me/adtechit/9.99USD"
+                target="_blank"
+                rel="noreferrer"
+                className="w-full py-3 rounded-xl font-medium text-white transition-colors flex items-center justify-center gap-2"
+                style={{ backgroundColor: theme.primary }}
+              >
+                <Coffee size={16} /> Buy the developer a coffee
+              </a>
+              <div>
+                <label className={`text-xs font-semibold ${textSecondary} mb-1 block`}>Your email (optional)</label>
+                <input
+                  type="email"
+                  value={featureEmail}
+                  onChange={(e) => setFeatureEmail(e.target.value)}
+                  placeholder="you@email.com"
+                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
+                  style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
+                />
+              </div>
+              <div>
+                <label className={`text-xs font-semibold ${textSecondary} mb-1 block`}>Feature request *</label>
+                <textarea
+                  value={featureMessage}
+                  onChange={(e) => setFeatureMessage(e.target.value)}
+                  placeholder="Describe your idea or problem..."
+                  rows={4}
+                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none resize-none ${textPrimary}`}
+                  style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
+                />
+              </div>
+              {featureStatus && (
+                <p
+                  className="text-xs"
+                  style={{ color: featureStatus.type === 'success' ? theme.primary : theme.secondary }}
+                >
+                  {featureStatus.message}
+                </p>
+              )}
+              <button
+                onClick={handleSubmitFeatureRequest}
+                disabled={isSubmittingFeature}
+                className="w-full py-3 rounded-xl font-medium text-white transition-colors"
+                style={{ backgroundColor: theme.primary, opacity: isSubmittingFeature ? 0.7 : 1 }}
+              >
+                {isSubmittingFeature ? 'Sending...' : 'Submit Request'}
+              </button>
+              <div
+                className="p-3 rounded-xl text-center text-xs font-medium"
+                style={{
+                  backgroundColor: isLightTheme ? '#f1f5f9' : 'rgba(15,23,42,0.6)',
+                  color: isLightTheme ? '#475569' : '#cbd5e1',
+                  border: `1px solid ${theme.primary}20`
+                }}
+              >
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Community Thanks Modal */}
       {showCommunityThanks && (
@@ -717,6 +1021,9 @@ const SettingsPage: React.FC = () => {
                   <h4 className={`text-sm font-bold mb-3 ${textPrimary}`}>Reddit Community:</h4>
                   <div className="space-y-2">
                     <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
+                      <p className={`text-sm ${textPrimary}`}>CoffeeFX</p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
                       <p className={`text-sm ${textPrimary}`}>Even_Competition2461</p>
                     </div>
                     <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
@@ -727,6 +1034,17 @@ const SettingsPage: React.FC = () => {
                     </div>
                     <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
                       <p className={`text-sm ${textPrimary}`}>Peppie79</p>
+                    </div>
+                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
+                      <p className={`text-sm ${textPrimary}`}>Jerry Sonenarong</p>
+                    </div>
+                  </div>
+                </div>
+                <div className="mb-4">
+                  <h4 className={`text-sm font-bold mb-3 ${textPrimary}`}>Via App Feedback:</h4>
+                  <div className="space-y-2">
+                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
+                      <p className={`text-sm ${textPrimary}`}>Jamaal</p>
                     </div>
                   </div>
                 </div>

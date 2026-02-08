@@ -13,6 +13,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   const [error, setError] = useState('');
   const [storedUser, setStoredUser] = useState<{ name: string; pin: string } | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockUntil, setLockUntil] = useState<number | null>(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('velox_user');
@@ -23,6 +25,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   }, []);
 
   const handlePinInput = (digit: string) => {
+    if (lockUntil && Date.now() < lockUntil) return;
     setError('');
     if (view === 'register_pin') {
       if (pin.length < 6) setPin(pin + digit);
@@ -33,6 +36,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   };
 
   const handleDelete = () => {
+    if (lockUntil && Date.now() < lockUntil) return;
     if (view === 'register_pin') {
       if (confirmPin.length > 0) setConfirmPin(confirmPin.slice(0, -1));
       else if (pin.length > 0) setPin(pin.slice(0, -1));
@@ -42,6 +46,7 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   };
 
   const handleClear = () => {
+    if (lockUntil && Date.now() < lockUntil) return;
     setPin('');
     setConfirmPin('');
     setError('');
@@ -78,13 +83,38 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   useEffect(() => {
     if (view === 'login' && pin.length === 6 && storedUser) {
       if (pin === storedUser.pin) {
+        setFailedAttempts(0);
+        setLockUntil(null);
         onAuthenticated();
       } else {
-        setError('Incorrect PIN');
+        const nextAttempts = failedAttempts + 1;
+        setFailedAttempts(nextAttempts);
+        if (nextAttempts >= 3) {
+          const lockUntilTime = Date.now() + 30000;
+          setLockUntil(lockUntilTime);
+          setError('Too many attempts. Try again in 30 seconds.');
+        } else {
+          setError('Incorrect PIN');
+        }
         setPin('');
       }
     }
-  }, [pin, view, storedUser, onAuthenticated]);
+  }, [pin, view, storedUser, onAuthenticated, failedAttempts]);
+
+  useEffect(() => {
+    if (!lockUntil) return;
+    const interval = setInterval(() => {
+      if (Date.now() >= lockUntil) {
+        setLockUntil(null);
+        setFailedAttempts(0);
+        setError('');
+      } else {
+        const remaining = Math.ceil((lockUntil - Date.now()) / 1000);
+        setError(`Too many attempts. Try again in ${remaining} seconds.`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockUntil]);
 
   const renderPinDots = (currentPin: string, total: number = 6) => (
     <div className="flex justify-center gap-3 my-8">
@@ -106,26 +136,30 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
         <button
           key={num}
           onClick={() => handlePinInput(num.toString())}
-          className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all"
+          disabled={lockUntil !== null && Date.now() < lockUntil}
+          className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {num}
         </button>
       ))}
       <button
         onClick={handleClear}
-        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 text-xs font-medium text-slate-500 hover:text-[#f472b6] hover:border-[#f472b6]/30 active:scale-95 transition-all"
+        disabled={lockUntil !== null && Date.now() < lockUntil}
+        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 text-xs font-medium text-slate-500 hover:text-[#f472b6] hover:border-[#f472b6]/30 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         CLR
       </button>
       <button
         onClick={() => handlePinInput('0')}
-        className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all"
+        disabled={lockUntil !== null && Date.now() < lockUntil}
+        className="w-20 h-20 rounded-2xl bg-slate-800/50 border border-slate-700/50 text-2xl font-semibold text-white hover:bg-[#8b5cf6]/10 hover:border-[#8b5cf6]/30 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         0
       </button>
       <button
         onClick={handleDelete}
-        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 flex items-center justify-center text-slate-500 hover:text-white hover:border-slate-600 active:scale-95 transition-all"
+        disabled={lockUntil !== null && Date.now() < lockUntil}
+        className="w-20 h-20 rounded-2xl bg-slate-800/30 border border-slate-700/30 flex items-center justify-center text-slate-500 hover:text-white hover:border-slate-600 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
         <Delete size={24} />
       </button>

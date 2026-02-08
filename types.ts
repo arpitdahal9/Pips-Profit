@@ -25,6 +25,7 @@ export interface Strategy {
   title: string;
   symbol: string; // The pair this strategy applies to (e.g., XAUUSD)
   items: ChecklistItem[];
+  photos?: string[]; // Array of Base64 or URLs for setup screenshots
 }
 
 export interface Trade {
@@ -66,6 +67,7 @@ export interface Trade {
   commission?: number; // Commission amount (always negative, deducted from P&L)
   // Risk:Reward (only set for winning trades)
   riskRewardRatio?: number; // e.g., 2 means 1:2 R:R
+  archived?: boolean; // Whether the trade is archived
 }
 
 export interface DashboardStats {

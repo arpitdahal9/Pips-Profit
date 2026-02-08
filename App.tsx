@@ -1,15 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Zap } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import TradeLog from './components/TradeLog';
 import CalendarPage from './components/CalendarPage';
 import SettingsPage from './components/SettingsPage';
-import AuthScreen from './components/AuthScreen';
 import BottomNav from './components/BottomNav';
 import TradeSetup from './components/TradeSetup';
 import { StoreProvider } from './context/StoreContext';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { AuthModalProvider } from './context/AuthModalContext';
+import AuthScreen from './components/AuthScreen';
 
 // Capacitor Status Bar (only runs on native)
 const initStatusBar = async (color: string) => {
@@ -24,6 +25,7 @@ const initStatusBar = async (color: string) => {
 
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar');
+    await StatusBar.setOverlaysWebView({ overlay: false });
     await StatusBar.setStyle({ style: Style.Dark });
     await StatusBar.setBackgroundColor({ color });
   } catch (e) {
@@ -99,12 +101,27 @@ const AppContent = () => {
 };
 
 const App = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isUnlocked, setIsUnlocked] = useState(false);
+  const hasShownRef = useRef(false);
 
-  if (!isAuthenticated) {
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        if (!hasShownRef.current) {
+          hasShownRef.current = true;
+          return;
+        }
+        setIsUnlocked(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
+  if (!isUnlocked) {
     return (
       <ThemeProvider>
-        <AuthScreen onAuthenticated={() => setIsAuthenticated(true)} />
+        <AuthScreen onAuthenticated={() => setIsUnlocked(true)} />
       </ThemeProvider>
     );
   }
@@ -112,9 +129,11 @@ const App = () => {
   return (
     <ThemeProvider>
       <StoreProvider>
-        <HashRouter>
-          <AppContent />
-        </HashRouter>
+        <AuthModalProvider>
+          <HashRouter>
+            <AppContent />
+          </HashRouter>
+        </AuthModalProvider>
       </StoreProvider>
     </ThemeProvider>
   );

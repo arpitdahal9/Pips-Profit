@@ -1,5 +1,29 @@
 # Day Trading Journal - Changelog
 
+## Version 17.0 - Feature Requests, Trade Setup Analytics & Fixes
+
+### 🎯 Major Features
+
+#### 1. **Request a Feature (Formspree)** 💬
+- **In-app Feature Requests**: Added a Request a Feature flow in Settings that submits to Formspree.
+- **Simple UX**: A dedicated button at the end of Settings opens a modal with email (optional) and request details.
+
+#### 2. **Trade Setup Analytics Dashboard** 📊
+- **Dashboard-style Cards**: Trade Setup items now show analytics as cards (Trades, Win Rate, Max Drawdown, Max Win).
+- **Expandable Checklist**: Checklist toggles with a clean plus/minus control.
+
+### 🔧 Improvements
+
+- **Community Contributors**: Added CoffeeFX to the top of the list.
+- **Cleaner Accounts Screen**: Removed the unused “Earn +75 XP” badge when no account is configured.
+- **Smoother Attachments**: Screenshot uploads now compress/resize before saving to prevent freezing.
+
+### 🐛 Fixes
+
+- **Account Creation Modal**: Fixed “Add Account First” modal so Create Account actually works.
+
+---
+
 ## Version 16.0 - Multiple Trade Logging & Community Appreciation
 
 ### 🎯 Major Features

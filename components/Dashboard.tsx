@@ -1,9 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
+import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, BarChart3, Zap, Plus, ChevronRight, ChevronDown, Wallet, X, Target } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuthModal } from '../context/AuthModalContext';
 import TradeWizard from './TradeWizard';
 import TradeTypeSelector from './TradeTypeSelector';
 import MultipleTradeWizard from './MultipleTradeWizard';
@@ -17,14 +18,13 @@ const AccountCreationForm: React.FC<{
   theme: any;
 }> = ({ onSuccess, onCancel, theme }) => {
   const { addAccount } = useStore();
-  const [formData, setFormData] = useState({ name: '', broker: '', startingBalance: '' });
+  const [formData, setFormData] = useState({ name: '', startingBalance: '' });
 
   const handleSubmit = () => {
-    if (formData.name && formData.broker && formData.startingBalance) {
+    if (formData.name && formData.startingBalance) {
       addAccount({
         id: `acc_${Date.now()}`,
         name: formData.name,
-        broker: formData.broker,
         startingBalance: parseFloat(formData.startingBalance),
         createdAt: new Date().toISOString(),
         isMain: false,
@@ -45,13 +45,6 @@ const AccountCreationForm: React.FC<{
         autoFocus
       />
       <input
-        type="text"
-        value={formData.broker}
-        onChange={e => setFormData({ ...formData, broker: e.target.value })}
-        placeholder="Broker (e.g., IC Markets)"
-        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
-      />
-      <input
         type="number"
         value={formData.startingBalance}
         onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
@@ -61,7 +54,7 @@ const AccountCreationForm: React.FC<{
       <div className="flex gap-2 pt-2">
         <button
           onClick={handleSubmit}
-          disabled={!formData.name || !formData.broker || !formData.startingBalance}
+          disabled={!formData.name || !formData.startingBalance}
           className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
         >
           Create Account
@@ -80,8 +73,9 @@ const AccountCreationForm: React.FC<{
 
 const Dashboard = () => {
   const navigate = useNavigate();
-  const { trades, accounts, getAccountBalance, strategies } = useStore();
+  const { trades, accounts, getAccountBalance, strategies, cloudUser } = useStore();
   const { theme, isLightTheme } = useTheme();
+  const { openAuthModal } = useAuthModal();
   const textPrimary = isLightTheme ? 'text-slate-800' : 'text-white';
   const textSecondary = isLightTheme ? 'text-slate-600' : 'text-slate-400';
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -89,6 +83,7 @@ const Dashboard = () => {
   const [showAddAccountPrompt, setShowAddAccountPrompt] = useState(false);
   const [showTradeTypeSelector, setShowTradeTypeSelector] = useState(false);
   const [isMultipleTradeMode, setIsMultipleTradeMode] = useState(false);
+  const [showBackupPrompt, setShowBackupPrompt] = useState(false);
 
   const visibleAccounts = accounts.filter(a => !a.isHidden);
 
@@ -107,6 +102,78 @@ const Dashboard = () => {
   }, [visibleAccounts]);
 
   const percentChange = totalStartingBalance > 0 ? ((totalPortfolio - totalStartingBalance) / totalStartingBalance * 100) : 0;
+
+  const strategyPerformance = useMemo(() => {
+    if (strategies.length === 0) {
+      return { data: [], series: [] as Array<{ id: string; title: string; color: string; key: string }> };
+    }
+
+    const palette = ['#8B5CF6', '#22C55E', '#F97316', '#38BDF8', '#F43F5E', '#A3E635'];
+    const strategyIndex = strategies.reduce<Record<string, { id: string; title: string; key: string }>>((acc, strategy) => {
+      acc[strategy.id] = { id: strategy.id, title: strategy.title, key: `s_${strategy.id}` };
+      return acc;
+    }, {});
+
+    const titleIndex = strategies.reduce<Record<string, string>>((acc, strategy) => {
+      acc[strategy.title] = strategy.id;
+      return acc;
+    }, {});
+
+    const datedTrades = trades
+      .filter(t => t.date && (t.strategy || t.strategyId))
+      .sort((a, b) => new Date(`${a.date}T${a.time || '00:00'}`).getTime() - new Date(`${b.date}T${b.time || '00:00'}`).getTime());
+
+    const tradeBuckets = datedTrades.reduce<Record<string, typeof datedTrades>>((acc, trade) => {
+      if (!acc[trade.date]) acc[trade.date] = [];
+      acc[trade.date].push(trade);
+      return acc;
+    }, {});
+
+    const dates = Object.keys(tradeBuckets).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+    const cumulative: Record<string, number> = {};
+    const series = strategies.map((strategy, idx) => ({
+      id: strategy.id,
+      title: strategy.title,
+      key: strategyIndex[strategy.id].key,
+      color: palette[idx % palette.length]
+    }));
+
+    series.forEach(item => {
+      cumulative[item.key] = 0;
+    });
+
+    const data = dates.map(date => {
+      const dayTrades = tradeBuckets[date] || [];
+      dayTrades.forEach(trade => {
+        const resolvedId = trade.strategyId || titleIndex[trade.strategy || ''];
+        const key = resolvedId && strategyIndex[resolvedId] ? strategyIndex[resolvedId].key : null;
+        if (key) {
+          const net = trade.pnl + (trade.commission || 0);
+          cumulative[key] += net;
+        }
+      });
+      return {
+        date: new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        ...cumulative
+      };
+    });
+
+    return { data, series };
+  }, [strategies, trades]);
+
+  useEffect(() => {
+    if (cloudUser) return;
+    const dismissed = localStorage.getItem('velox_backup_prompt_dismissed');
+    if (dismissed) return;
+    const tradeThresholdMet = trades.length >= 10;
+    const firstUse = localStorage.getItem('velox_first_use');
+    const daysSinceFirstUse = firstUse
+      ? (Date.now() - new Date(firstUse).getTime()) / (1000 * 60 * 60 * 24)
+      : 0;
+    if (tradeThresholdMet || daysSinceFirstUse >= 7) {
+      setShowBackupPrompt(true);
+    }
+  }, [cloudUser, trades.length]);
 
 
   // Get trades from all visible accounts
@@ -318,6 +385,61 @@ const Dashboard = () => {
       )}
 
       <div className="px-4 pt-4 pb-6 max-w-lg mx-auto">
+        {!cloudUser && (
+          <div
+            className="p-4 rounded-2xl mb-4 flex items-center justify-between gap-3"
+            style={{ background: theme.cardBg, border: `1px solid ${theme.primary}20` }}
+          >
+            <div>
+              <p className={`text-sm font-semibold ${textPrimary}`}>🔒 Sign in to backup your trades across devices</p>
+              <p className={`text-xs ${textSecondary}`}>Sync when ready, keep working offline anytime.</p>
+            </div>
+            <button
+              onClick={openAuthModal}
+              className="px-3 py-2 text-xs font-semibold rounded-xl text-white"
+              style={{ backgroundColor: theme.primary }}
+            >
+              Sign In
+            </button>
+          </div>
+        )}
+
+        {!cloudUser && showBackupPrompt && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+            <div
+              className="w-full max-w-sm rounded-2xl p-5"
+              style={{ background: theme.cardBg, border: `1px solid ${theme.primary}30` }}
+            >
+              <h3 className={`text-lg font-bold ${textPrimary} mb-2`}>Backup your data</h3>
+              <p className={`text-sm ${textSecondary} mb-4`}>
+                Sign in to back up your trades and keep them safe across devices.
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setShowBackupPrompt(false);
+                    localStorage.setItem('velox_backup_prompt_dismissed', '1');
+                    openAuthModal();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-white font-semibold"
+                  style={{ backgroundColor: theme.primary }}
+                >
+                  Back up now
+                </button>
+                <button
+                  onClick={() => {
+                    setShowBackupPrompt(false);
+                    localStorage.setItem('velox_backup_prompt_dismissed', '1');
+                  }}
+                  className="flex-1 py-2.5 rounded-xl font-medium"
+                  style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)', color: isLightTheme ? '#475569' : '#e2e8f0' }}
+                >
+                  Later
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Portfolio Value Card */}
         <div
@@ -505,6 +627,40 @@ const Dashboard = () => {
           {strategies.length === 0 ? (
             <p className="text-sm text-slate-500 text-center py-4">No strategies created yet</p>
           ) : (
+            <>
+              {strategyPerformance.data.length > 0 ? (
+                <div className="mb-4">
+                  <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-2">Strategy performance</p>
+                  <div className="h-32 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={strategyPerformance.data}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(148,163,184,0.2)" />
+                        <XAxis dataKey="date" tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9CA3AF' }} axisLine={false} tickLine={false} />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#020617', borderColor: '#1f2937', borderRadius: 8 }}
+                          formatter={(value: number, name: string) => {
+                            const series = strategyPerformance.series.find(s => s.key === name);
+                            return [`$${value.toFixed(2)}`, series?.title || 'Strategy'];
+                          }}
+                        />
+                        {strategyPerformance.series.map(series => (
+                          <Line
+                            key={series.key}
+                            type="monotone"
+                            dataKey={series.key}
+                            stroke={series.color}
+                            strokeWidth={2}
+                            dot={false}
+                          />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 text-center py-4">No strategy performance data yet</p>
+              )}
             <div className="space-y-3">
               {strategies.slice(0, 3).map(strategy => {
                 const strategyTrades = trades.filter(t => 
@@ -537,6 +693,7 @@ const Dashboard = () => {
                 </p>
               )}
             </div>
+            </>
           )}
         </div>
 
