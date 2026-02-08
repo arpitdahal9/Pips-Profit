@@ -413,7 +413,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
               }}
               className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
                 entryData.symbol === pair 
-                  ? 'bg-brand-500 text-slate-900 font-bold' 
+                  ? 'text-slate-900 font-bold'
+                  : ''
+                }
+                style={entryData.symbol === pair ? {
+                  backgroundColor: theme.primary
+                } : {}} 
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
             >
@@ -440,9 +445,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
             }}
             className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
               entryData.direction === 'BUY'
-                ? 'bg-emerald-500 text-white'
+                ? 'text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
+            style={entryData.direction === 'BUY' ? {
+              backgroundColor: theme.primary
+            } : {}}
           >
             BUY
           </button>
@@ -453,9 +461,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
             }}
             className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
               entryData.direction === 'SELL'
-                ? 'bg-rose-500 text-white'
+                ? 'text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
+            style={entryData.direction === 'SELL' ? {
+              backgroundColor: theme.secondary || '#f43f5e'
+            } : {}}
           >
             SELL
           </button>
@@ -770,7 +781,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
                 }}
                 className={`w-full p-3 rounded-lg text-left transition-all ${
                   detailData.strategy === strategy.title
-                    ? 'bg-brand-500 text-slate-900'
+                    ? 'text-slate-900'
+                    : ''
+                  }
+                  style={detailData.session === session ? {
+                    backgroundColor: theme.primary
+                  } : {}}
                     : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
               >
@@ -809,7 +825,16 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
           {detailData.strategy && detailData.strategy !== 'Other' && (
             <button
               onClick={advanceDetailStep}
-              className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              className="w-full py-3 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primaryDark;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primary;
+              }}
             >
               Next
             </button>
@@ -817,7 +842,16 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
           {detailData.strategy === 'Other' && detailData.customStrategy && (
             <button
               onClick={advanceDetailStep}
-              className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              className="w-full py-3 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primaryDark;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primary;
+              }}
             >
               Next
             </button>
@@ -877,7 +911,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
                 }}
                 className={`w-full p-3 rounded-lg text-left transition-all ${
                   detailData.session === session
-                    ? 'bg-brand-500 text-slate-900'
+                    ? 'text-slate-900'
+                    : ''
+                  }
+                  style={detailData.session === session ? {
+                    backgroundColor: theme.primary
+                  } : {}}
                     : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
               >
@@ -903,7 +942,12 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
                 onClick={() => toggleEmotion(emotion)}
                 className={`p-3 rounded-lg font-medium transition-all ${
                   detailData.emotions.includes(emotion)
-                    ? 'bg-brand-500 text-slate-900'
+                    ? 'text-slate-900'
+                    : ''
+                  }
+                  style={detailData.session === session ? {
+                    backgroundColor: theme.primary
+                  } : {}}
                     : 'bg-slate-800 text-white hover:bg-slate-700'
                 }`}
               >
@@ -914,7 +958,16 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
           {detailData.emotions.length > 0 && (
             <button
               onClick={advanceDetailStep}
-              className="w-full py-3 bg-brand-500 hover:bg-brand-600 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              className="w-full py-3 text-slate-900 rounded-xl font-bold transition-colors mt-4"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primaryDark;
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primary;
+              }}
             >
               Next
             </button>
@@ -1125,7 +1178,18 @@ const MultipleTradeWizard: React.FC<MultipleTradeWizardProps> = ({ isOpen, onClo
             <button
               onClick={() => canProceedToDetails() && setWizardStep('details')}
               disabled={!canProceedToDetails()}
-              className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+              className="flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) {
+                  e.currentTarget.style.backgroundColor = theme.primaryDark;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primary;
+              }}
             >
               Next
               <ChevronRight size={18} />

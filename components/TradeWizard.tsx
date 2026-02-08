@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { X, ChevronRight, ChevronLeft, CheckCircle2, Wallet, ChevronDown, SkipForward, Calculator, TrendingUp, TrendingDown, AlertCircle, Calendar, Image, XCircle, Plus } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
+import { useTheme } from '../context/ThemeContext';
 import { Trade, TradeStatus, TradingSession } from '../types';
 
 interface TradeWizardProps {
@@ -57,7 +58,7 @@ const AccountCreationInWizard: React.FC<{
             value={formData.name}
             onChange={e => setFormData({ ...formData, name: e.target.value })}
             placeholder="Account name"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
             autoFocus
           />
           <input
@@ -65,13 +66,24 @@ const AccountCreationInWizard: React.FC<{
             value={formData.startingBalance}
             onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
             placeholder="Starting balance"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
           />
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleSubmit}
               disabled={!formData.name || !formData.startingBalance}
-              className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
+              className="flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
+              style={{
+                backgroundColor: theme.primary,
+              }}
+              onMouseEnter={(e) => {
+                if (!e.currentTarget.disabled) {
+                  e.currentTarget.style.backgroundColor = theme.primaryDark;
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = theme.primary;
+              }}
             >
               Create Account
             </button>
@@ -246,6 +258,7 @@ const calculateRR = (
 
 const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade, isMultipleMode = false }) => {
   const { addTrade, updateTrade, accounts, strategies, addStrategy } = useStore();
+  const { theme } = useTheme();
   const navigate = useNavigate();
   
   // Main wizard step
@@ -636,7 +649,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
             setManualPnL(false);
           }}
           placeholder="e.g., GBPJPY"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:border-brand-500 outline-none"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono focus:outline-none outline-none"
           autoFocus
         />
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
@@ -649,9 +662,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               }}
               className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
                 entryData.symbol === pair 
-                  ? 'bg-brand-500 text-slate-900 font-bold' 
+                  ? 'text-slate-900 font-bold' 
                   : 'bg-slate-800 text-slate-400 hover:text-white'
               }`}
+              style={entryData.symbol === pair ? {
+                backgroundColor: theme.primary
+              } : {}}
             >
               {pair}
             </button>
@@ -686,7 +702,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               }
             }}
             placeholder="HH:MM"
-            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-slate-300 font-mono focus:border-brand-500 outline-none w-16 text-center"
+            className="bg-slate-800 border border-slate-700 rounded-lg px-2 py-0.5 text-xs text-slate-300 font-mono focus:outline-none outline-none w-16 text-center"
           />
           {/* Date Picker Button */}
           <button
@@ -726,9 +742,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
             }}
             className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
               entryData.direction === 'BUY'
-                ? 'bg-emerald-500 text-white'
+                ? 'text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
+            style={entryData.direction === 'BUY' ? {
+              backgroundColor: theme.primary
+            } : {}}
           >
             BUY
           </button>
@@ -739,9 +758,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
             }}
             className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
               entryData.direction === 'SELL'
-                ? 'bg-rose-500 text-white'
+                ? 'text-white'
                 : 'bg-slate-800 text-slate-400 hover:text-white'
             }`}
+            style={entryData.direction === 'SELL' ? {
+              backgroundColor: theme.secondary || '#f43f5e'
+            } : {}}
           >
             SELL
           </button>
@@ -773,7 +795,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   setManualPnL(false);
                 }}
                 placeholder="0.00000"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
               />
             </div>
             <div>
@@ -787,7 +809,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   setManualPnL(false);
                 }}
                 placeholder="0.00000"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
               />
             </div>
           </div>
@@ -802,7 +824,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 value={entryData.stopLoss}
                 onChange={e => setEntryData({ ...entryData, stopLoss: e.target.value })}
                 placeholder="Optional"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
               />
             </div>
             <div>
@@ -813,7 +835,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 value={entryData.takeProfit}
                 onChange={e => setEntryData({ ...entryData, takeProfit: e.target.value })}
                 placeholder="Optional"
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+                className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
               />
             </div>
           </div>
@@ -844,7 +866,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               setManualPnL(false);
             }}
             placeholder="1.00"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
           />
         </div>
         <div>
@@ -863,7 +885,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               setManualPnL(true);
             }}
             placeholder="-510.92"
-            className={`w-full bg-slate-950 border rounded-lg px-3 py-2 font-mono text-sm focus:border-brand-500 outline-none ${
+            className={`w-full bg-slate-950 border rounded-lg px-3 py-2 font-mono text-sm focus:outline-none outline-none ${
               entryData.pnl && !isNaN(parseFloat(entryData.pnl))
                 ? parseFloat(entryData.pnl) >= 0 
                   ? 'border-emerald-500/50 text-emerald-400' 
@@ -883,7 +905,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
           value={entryData.commission}
           onChange={e => setEntryData({ ...entryData, commission: e.target.value })}
           placeholder="e.g., 3.50"
-          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:border-brand-500 outline-none"
+          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-sm focus:outline-none outline-none"
         />
         <p className="text-[9px] text-slate-400 mt-1">Commission will be deducted (always negative)</p>
       </div>
@@ -935,7 +957,19 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
         <button
           onClick={() => setWizardStep('details')}
           disabled={!canProceedToDetails()}
-          className="flex-1 py-3.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg shadow-brand-500/20"
+          className="flex-1 py-3.5 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-all active:scale-[0.98] flex items-center justify-center gap-2 shadow-lg"
+          style={{
+            backgroundColor: theme.primary,
+            boxShadow: `0 0 20px ${theme.primary}40`
+          }}
+          onMouseEnter={(e) => {
+            if (!e.currentTarget.disabled) {
+              e.currentTarget.style.backgroundColor = theme.primaryDark;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = theme.primary;
+          }}
         >
           Next
           <ChevronRight size={18} />
@@ -964,9 +998,14 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                       }}
                       className={`w-full p-3 rounded-xl text-left transition-all ${
                         detailData.strategy === s.title
-                          ? 'bg-brand-500/20 border-2 border-brand-500 text-brand-400'
+                          ? 'border-2 text-white'
                           : 'bg-slate-800 border-2 border-transparent text-slate-300 hover:border-slate-600'
                       }`}
+                      style={detailData.strategy === s.title ? {
+                        backgroundColor: theme.primary + '20',
+                        borderColor: theme.primary,
+                        color: theme.primaryLight
+                      } : {}}
                     >
                       {s.title}
                     </button>
@@ -977,7 +1016,19 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                       setNewStrategyTitle('');
                       setNewStrategyItems(['']);
                     }}
-                    className="w-full p-3 rounded-xl text-left transition-all border-2 border-dashed border-brand-500/50 text-brand-400 hover:border-brand-500 hover:bg-brand-500/10 flex items-center justify-center gap-2"
+                    className="w-full p-3 rounded-xl text-left transition-all border-2 border-dashed flex items-center justify-center gap-2"
+                    style={{
+                      borderColor: `${theme.primary}50`,
+                      color: theme.primaryLight
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = theme.primary;
+                      e.currentTarget.style.backgroundColor = `${theme.primary}10`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = `${theme.primary}50`;
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
                   >
                     <Plus size={16} />
                     New Trade Setup
@@ -994,7 +1045,16 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                       setNewStrategyTitle('');
                       setNewStrategyItems(['']);
                     }}
-                    className="w-full py-3 rounded-xl text-sm font-semibold text-slate-900 bg-brand-500 hover:bg-brand-600 transition-colors"
+                    className="w-full py-3 rounded-xl text-sm font-semibold text-slate-900 transition-colors"
+                    style={{
+                      backgroundColor: theme.primary,
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = theme.primaryDark;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = theme.primary;
+                    }}
                   >
                     Create your first strategy
                   </button>
@@ -1064,9 +1124,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   }}
                   className={`p-3 rounded-xl font-medium text-xs transition-all ${
                     detailData.session === session
-                      ? 'bg-brand-500 text-slate-900'
+                      ? 'text-slate-900'
                       : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
                   }`}
+                  style={detailData.session === session ? {
+                    backgroundColor: theme.primary
+                  } : {}}
                 >
                   {session}
                 </button>
@@ -1087,9 +1150,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   onClick={() => toggleEmotion(emotion)}
                   className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
                     detailData.emotions.includes(emotion)
-                      ? 'bg-brand-500 text-slate-900'
+                      ? 'text-slate-900'
                       : 'bg-slate-800 text-slate-400 hover:text-white'
                   }`}
+                  style={detailData.emotions.includes(emotion) ? {
+                    backgroundColor: theme.primary
+                  } : {}}
                 >
                   {emotion}
                 </button>
@@ -1098,7 +1164,16 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
             {detailData.emotions.length > 0 && (
               <button
                 onClick={advanceDetailStep}
-                className="w-full mt-4 py-3 bg-brand-500 text-slate-900 rounded-xl font-bold flex items-center justify-center gap-2"
+                className="w-full mt-4 py-3 text-slate-900 rounded-xl font-bold flex items-center justify-center gap-2"
+                style={{
+                  backgroundColor: theme.primary,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = theme.primaryDark;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = theme.primary;
+                }}
               >
                 Continue <ChevronRight size={18} />
               </button>
@@ -1131,7 +1206,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               value={detailData.customMistake}
               onChange={e => setDetailData({ ...detailData, customMistake: e.target.value })}
               placeholder="Or describe your own..."
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-brand-500 outline-none"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none outline-none"
             />
             <button
               onClick={advanceDetailStep}
@@ -1152,7 +1227,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               onChange={e => setDetailData({ ...detailData, notes: e.target.value })}
               placeholder="What did you learn? What would you do differently?"
               rows={4}
-              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-brand-500 outline-none resize-none"
+              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none outline-none resize-none"
             />
             <button
               onClick={saveTrade}
@@ -1316,7 +1391,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   value={newStrategyTitle}
                   onChange={(e) => setNewStrategyTitle(e.target.value)}
                   placeholder="e.g., London Breakout"
-                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+                  className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
                   autoFocus
                 />
               </div>
@@ -1326,7 +1401,16 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   <label className="text-xs font-semibold text-slate-400">Checklist Items (Optional)</label>
                   <button
                     onClick={handleAddStrategyItem}
-                    className="text-xs text-brand-400 hover:text-brand-300 flex items-center gap-1"
+                    className="text-xs flex items-center gap-1 transition-colors"
+                    style={{
+                      color: theme.primaryLight
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.color = theme.primary;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.color = theme.primaryLight;
+                    }}
                   >
                     <Plus size={14} />
                     Add Item
@@ -1340,7 +1424,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                         value={item}
                         onChange={(e) => handleStrategyItemChange(index, e.target.value)}
                         placeholder="e.g., Sweep of Asian High"
-                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none outline-none"
                       />
                       {newStrategyItems.length > 1 && (
                         <button
@@ -1359,7 +1443,18 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 <button
                   onClick={handleCreateStrategy}
                   disabled={!newStrategyTitle.trim()}
-                  className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                  style={{
+                    backgroundColor: theme.primary,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!e.currentTarget.disabled) {
+                      e.currentTarget.style.backgroundColor = theme.primaryDark;
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = theme.primary;
+                  }}
                 >
                   <CheckCircle2 size={18} />
                   Create & Select

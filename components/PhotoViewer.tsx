@@ -16,19 +16,37 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
   onClose,
   onNavigate
 }) => {
-  // Prevent body scroll when viewer is open
+  // Prevent body scroll and handle escape key when viewer is open
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
+      
+      // Handle escape key to close
+      const handleEscape = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+          onClose();
+        }
+      };
+      
+      // Handle back button (Android)
+      const handleBackButton = () => {
+        onClose();
+      };
+      
+      window.addEventListener('keydown', handleEscape);
+      window.addEventListener('popstate', handleBackButton);
+      
+      return () => {
+        document.body.style.overflow = '';
+        window.removeEventListener('keydown', handleEscape);
+        window.removeEventListener('popstate', handleBackButton);
+      };
     } else {
       document.body.style.overflow = '';
     }
-    return () => {
-      document.body.style.overflow = '';
-    };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
-  if (!isOpen || images.length === 0) return null;
+  if (!isOpen || images.length === 0 || !images[currentIndex]) return null;
 
   const currentImage = images[currentIndex];
   const hasMultiple = images.length > 1;
@@ -142,18 +160,42 @@ const PhotoViewer: React.FC<PhotoViewerProps> = ({
 
       {/* Image */}
       <div className="flex items-center justify-center w-full h-full p-4">
-        <img
-          src={currentImage}
-          alt={`Photo ${currentIndex + 1}`}
-          className="max-w-full max-h-full object-contain rounded-lg select-none"
-          onClick={(e) => e.stopPropagation()}
-          draggable={false}
-          onError={(e) => {
-            // Fallback for broken images
-            const target = e.target as HTMLImageElement;
-            target.style.display = 'none';
-          }}
-        />
+        {currentImage ? (
+          <img
+            src={currentImage}
+            alt={`Photo ${currentIndex + 1}`}
+            className="max-w-full max-h-full object-contain rounded-lg select-none"
+            onClick={(e) => e.stopPropagation()}
+            draggable={false}
+            onError={(e) => {
+              // Fallback for broken images
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              // Show error message
+              const errorDiv = document.createElement('div');
+              errorDiv.className = 'text-white text-center p-4';
+              errorDiv.textContent = 'Failed to load image';
+              target.parentElement?.appendChild(errorDiv);
+            }}
+            onLoad={() => {
+              // Ensure image is visible when loaded
+              const target = document.querySelector('img[alt*="Photo"]') as HTMLImageElement;
+              if (target) {
+                target.style.display = 'block';
+              }
+            }}
+          />
+        ) : (
+          <div className="text-white text-center p-8">
+            <p className="text-lg mb-2">Image not available</p>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+            >
+              Close
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

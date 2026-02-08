@@ -8,6 +8,7 @@ import TradeTypeSelector from './TradeTypeSelector';
 import MultipleTradeWizard from './MultipleTradeWizard';
 import { Trade, TradeStatus } from '../types';
 import { getFeelingEmoji } from '../utils/feelings';
+import EnhancedPhotoViewer from './EnhancedPhotoViewer';
 
 // Swipeable Trade Item Component
 const SwipeableTradeItem: React.FC<{
@@ -615,7 +616,7 @@ const SwipeableTradeItem: React.FC<{
                           alert('Failed to read image file');
                         };
                         reader.readAsDataURL(file);
-                        if (imageUploadRef.current) imageUploadRef.current.value = '';
+                          if (imageUploadRef.current) imageUploadRef.current.value = '';
                       }
                     }}
                   />
@@ -705,7 +706,7 @@ const SwipeableTradeItem: React.FC<{
                     <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Net Profit/Loss</p>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className={`text-xs ${textSecondary}`}>P&L: ${trade.pnl.toFixed(2)}</p>
+                        <p className={`text-xs ${textSecondary}`}>P&L: ${(trade.pnl + (trade.commission || 0)).toFixed(2)}</p>
                         <p className={`text-xs ${textSecondary}`}>Commission: ${trade.commission.toFixed(2)}</p>
                       </div>
                       <p 
@@ -986,6 +987,8 @@ const TradeLog = () => {
   const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
+  const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number>(0);
+  const [fullscreenImageList, setFullscreenImageList] = useState<string[]>([]);
   const [showAddAccountPrompt, setShowAddAccountPrompt] = useState(false);
   const [deletedTrade, setDeletedTrade] = useState<{ trade: Trade; timeoutId: NodeJS.Timeout } | null>(null);
   const [swipedTradeId, setSwipedTradeId] = useState<string | null>(null);
@@ -1033,7 +1036,8 @@ const TradeLog = () => {
   };
 
   const getDayPnL = (dayTrades: typeof trades) => {
-    return dayTrades.reduce((sum, t) => sum + t.pnl, 0);
+    // Include commission in daily totals
+    return dayTrades.reduce((sum, t) => sum + t.pnl + (t.commission || 0), 0);
   };
 
   // Handle trade deletion with undo
@@ -1365,7 +1369,14 @@ const TradeLog = () => {
                             }}
                             isEditing={editingTradeId === trade.id}
                             onDelete={() => handleDeleteTrade(trade.id)}
-                            onImageClick={(image) => setFullscreenImage(image)}
+                            onImageClick={(image) => {
+                              // Find all images from this trade
+                              const tradeImages = trade.photos || (trade.photo ? [trade.photo] : []);
+                              const imageIndex = tradeImages.indexOf(image);
+                              setFullscreenImageList(tradeImages);
+                              setFullscreenImageIndex(imageIndex >= 0 ? imageIndex : 0);
+                              setFullscreenImage(image);
+                            }}
                             viewMode={viewMode}
                           />
                         );
@@ -1527,7 +1538,10 @@ const TradeLog = () => {
                                       className="font-mono font-bold text-xs"
                                       style={{ color: isProfit ? winColor : lossColor }}
                                     >
-                                      {isProfit ? '+' : ''}${trade.pnl.toFixed(2)}
+                                      {(() => {
+                                        const net = trade.pnl + (trade.commission || 0);
+                                        return (net >= 0 ? '+' : '') + net.toFixed(2);
+                                      })()}
                                     </p>
                                     <p className={`text-[10px] ${textSecondary}`}>
                                       {photos.length > 0 ? `${photos.length} screenshot${photos.length !== 1 ? 's' : ''}` : 'No screenshots'}
@@ -1557,6 +1571,10 @@ const TradeLog = () => {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            const tradeImages = trade.photos || (trade.photo ? [trade.photo] : []);
+                                            const photoIndex = tradeImages.indexOf(photo);
+                                            setFullscreenImageList(tradeImages);
+                                            setFullscreenImageIndex(photoIndex >= 0 ? photoIndex : 0);
                                             setFullscreenImage(photo);
                                           }}
                                           className="w-full rounded-xl overflow-hidden border transition-all hover:opacity-90 active:scale-[0.98]"
@@ -1592,8 +1610,8 @@ const TradeLog = () => {
                     </div>
                   </div>
                 ))}
-              </div>
-            )
+            </div>
+          )
         )}
 
         {/* Add Trade Button */}
@@ -1714,38 +1732,23 @@ const TradeLog = () => {
         </div>
       )}
 
-      {/* Fullscreen Image Modal */}
-      {fullscreenImage && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
-          onClick={() => setFullscreenImage(null)}
-        >
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
+      {/* Enhanced Photo Viewer */}
+      {fullscreenImage && fullscreenImageList.length > 0 && (
+        <EnhancedPhotoViewer
+          images={fullscreenImageList}
+          currentIndex={fullscreenImageIndex}
+          isOpen={true}
+          onClose={() => {
               setFullscreenImage(null);
-            }}
-            className="absolute top-4 right-4 p-3 bg-white/20 hover:bg-white/30 rounded-full transition-colors z-10 shadow-lg"
-            aria-label="Close image"
-          >
-            <X size={24} className="text-white" />
-          </button>
-          <div
-            className="absolute top-4 left-4 px-4 py-2 bg-black/50 hover:bg-black/70 rounded-lg transition-colors z-10 cursor-pointer"
-            onClick={(e) => {
-              e.stopPropagation();
-              setFullscreenImage(null);
-            }}
-          >
-            <span className="text-white text-sm font-medium">← Back</span>
-          </div>
-          <img
-            src={fullscreenImage}
-            alt="Trade screenshot fullscreen"
-            className="max-w-full max-h-full object-contain rounded-lg"
-            onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+            setFullscreenImageList([]);
+            setFullscreenImageIndex(0);
+          }}
+          onNavigate={(index) => {
+            setFullscreenImageIndex(index);
+            setFullscreenImage(fullscreenImageList[index]);
+          }}
+          theme={theme}
+        />
       )}
     </div>
   );

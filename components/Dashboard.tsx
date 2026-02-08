@@ -17,6 +17,7 @@ const AccountCreationForm: React.FC<{
   onCancel: () => void;
   theme: any;
 }> = ({ onSuccess, onCancel, theme }) => {
+  const { theme: themeContext } = useTheme();
   const { addAccount } = useStore();
   const [formData, setFormData] = useState({ name: '', startingBalance: '' });
 
@@ -55,7 +56,18 @@ const AccountCreationForm: React.FC<{
         <button
           onClick={handleSubmit}
           disabled={!formData.name || !formData.startingBalance}
-          className="flex-1 py-3 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
+          className="flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
+          style={{
+            backgroundColor: theme.primary,
+          }}
+          onMouseEnter={(e) => {
+            if (!e.currentTarget.disabled) {
+              e.currentTarget.style.backgroundColor = theme.primaryDark;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = theme.primary;
+          }}
         >
           Create Account
         </button>
@@ -286,7 +298,8 @@ const Dashboard = () => {
       const d = new Date(t.date);
       if (isNaN(d.getTime())) return;
       const key = d.toISOString().slice(0, 10);
-      byDate[key] = (byDate[key] || 0) + t.pnl;
+      // Include commission in daily totals
+      byDate[key] = (byDate[key] || 0) + t.pnl + (t.commission || 0);
     });
 
     const sortedKeys = Object.keys(byDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());

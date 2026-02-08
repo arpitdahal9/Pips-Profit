@@ -193,13 +193,28 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     const unsubscribe = onAuthStateChange((authUser) => {
       console.log('Auth state changed', authUser?.uid);
       if (authUser) {
+        // Save local data before switching to cloud
+        const localTrades = trades.length > 0 ? trades : loadTrades();
+        const localAccounts = accounts.length > 0 ? accounts : loadAccounts();
+        const localStrategies = strategies.length > 0 ? strategies : loadStrategies();
+        const localTags = tags.length > 0 ? tags : loadTags();
+        
+        // Store local data temporarily for migration
+        if (localTrades.length > 0 || localAccounts.length > 0 || localStrategies.length > 0 || localTags.length > 0) {
+          localStorage.setItem('velox_pending_migration', JSON.stringify({
+            trades: localTrades,
+            accounts: localAccounts,
+            strategies: localStrategies,
+            tags: localTags,
+            timestamp: Date.now()
+          }));
+        }
+        
         setCloudUser(authUser);
         setCloudReady(false);
         setSyncStatus(navigator.onLine ? 'syncing' : 'offline');
-        setTrades([]);
-        setAccounts([]);
-        setStrategies([]);
-        setTags([]);
+        // Don't clear immediately - wait for cloud data to load first
+        // The cloud subscription will handle setting the data
       } else {
         setCloudUser(null);
         setCloudReady(false);
@@ -209,7 +224,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       }
     });
     return unsubscribe;
-  }, [resetToLocalState]);
+  }, [resetToLocalState, trades, accounts, strategies, tags]);
 
   useEffect(() => {
     if (!cloudUser) {
@@ -230,6 +245,40 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     handleNetworkChange();
 
     const unsubscribe = subscribeToTrades(cloudUser.uid, ({ trades: remoteTrades, hasPendingWrites, fromCache }) => {
+      // CRITICAL FIX: If cloud is empty and we have local data, upload it first
+      const pendingMigration = localStorage.getItem('velox_pending_migration');
+      if (pendingMigration && remoteTrades.length === 0 && !fromCache) {
+        try {
+          const pending = JSON.parse(pendingMigration);
+          if (pending.trades && pending.trades.length > 0) {
+            // Upload local data to cloud
+            uploadLocalTrades(cloudUser.uid, pending.trades).catch(err => 
+              console.error('Failed to upload local trades', err)
+            );
+            if (pending.accounts && pending.accounts.length > 0) {
+              uploadLocalAccounts(cloudUser.uid, pending.accounts).catch(err => 
+                console.error('Failed to upload local accounts', err)
+              );
+            }
+            if (pending.strategies && pending.strategies.length > 0) {
+              uploadLocalStrategies(cloudUser.uid, pending.strategies).catch(err => 
+                console.error('Failed to upload local strategies', err)
+              );
+            }
+            if (pending.tags && pending.tags.length > 0) {
+              uploadLocalTags(cloudUser.uid, pending.tags).catch(err => 
+                console.error('Failed to upload local tags', err)
+              );
+            }
+            // Clear migration flag after attempting upload
+            localStorage.removeItem('velox_pending_migration');
+          }
+        } catch (e) {
+          console.error('Failed to process pending migration', e);
+        }
+      }
+      
+      // Set cloud data (will be empty initially, then populated after upload)
       setTrades(remoteTrades as Trade[]);
       setCloudReady(true);
       if (!navigator.onLine) {

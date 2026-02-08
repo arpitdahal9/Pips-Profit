@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Image, X, XCircle, Upload } from 'lucide-react';
-import { readImageFileAsDataUrl } from '../utils/imageProcessing';
+import { uploadImage, validateImageFile } from '../utils/imageService';
 
 interface PhotoUploadProps {
   photos: string[];
@@ -29,37 +29,89 @@ const PhotoUpload: React.FC<PhotoUploadProps> = ({
 
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-
-    // Check if it's an image
-    if (!file.type.startsWith('image/')) {
-      alert('Please select an image file');
+    if (!file) {
+      // Reset input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
-    // Check file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-      alert('Image size must be less than 10MB');
+    // Validate file
+    const validation = validateImageFile(file, 10);
+    if (!validation.valid) {
+      alert(validation.error || 'Invalid image file');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
     if (photos.length >= maxPhotos) {
       alert(`Maximum ${maxPhotos} photos allowed`);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
       return;
     }
 
     try {
       setIsProcessing(true);
-      const dataUrl = await readImageFileAsDataUrl(file, {
-        maxDimension: 1600,
-        quality: 0.85
+      
+      // Show processing state immediately to prevent UI blocking
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      // Check file size before processing
+      const fileSizeMB = file.size / (1024 * 1024);
+      if (fileSizeMB > 15) {
+        alert('Image file is too large (over 15MB). Please use a smaller image.');
+        setIsProcessing(false);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+      
+      // Adjust compression based on file size
+      let maxDimension = 1000;
+      let quality = 0.72;
+      
+      if (fileSizeMB > 2) {
+        maxDimension = 800;
+        quality = 0.65;
+      } else if (fileSizeMB > 1) {
+        // For 1.73MB files (like 12MP images), use moderate settings
+        maxDimension = 900;
+        quality = 0.7;
+      }
+      
+      const result = await uploadImage(file, {
+        maxDimension,
+        quality,
+        maxSizeMB: 15
       });
-      onPhotosChange([...photos, dataUrl]);
+
+      if (result.success && result.dataUrl) {
+        onPhotosChange([...photos, result.dataUrl]);
+      } else {
+        const errorMsg = result.error || 'Failed to upload image';
+        if (errorMsg.includes('too large') || errorMsg.includes('resolution')) {
+          alert('Image is too large or high resolution. Please try a smaller image (under 10MP recommended).');
+        } else {
+          alert(errorMsg);
+        }
+      }
     } catch (error) {
       console.error('Failed to process image:', error);
-      alert('Failed to process image. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('timeout') || errorMessage.includes('too large') || errorMessage.includes('resolution')) {
+        alert('Image is too large or high resolution. Please try a smaller image (under 10MP recommended).');
+      } else {
+        alert('Failed to process image. Please try again.');
+      }
     } finally {
       setIsProcessing(false);
+      // Always reset input to allow selecting the same file again
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
