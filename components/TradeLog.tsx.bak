@@ -7,8 +7,9 @@ import TradeWizard from './TradeWizard';
 import TradeTypeSelector from './TradeTypeSelector';
 import MultipleTradeWizard from './MultipleTradeWizard';
 import PhotoAnnotator from './PhotoAnnotator';
-import { Trade, TradeStatus, TradingAccount } from '../types';
+import { Trade, TradeStatus } from '../types';
 import { getFeelingEmoji } from '../utils/feelings';
+import EnhancedPhotoViewer from './EnhancedPhotoViewer';
 
 // Swipeable Trade Item Component
 const SwipeableTradeItem: React.FC<{
@@ -54,7 +55,6 @@ const SwipeableTradeItem: React.FC<{
   viewMode = 'normal',
   strategies = []
 }) => {
-    const { accounts } = useStore();
     const swipeRef = useRef<HTMLDivElement>(null);
     const startXRef = useRef<number>(0);
     const startYRef = useRef<number>(0);
@@ -204,11 +204,6 @@ const SwipeableTradeItem: React.FC<{
       }
     }, [isSwiped]);
 
-    const currencySymbol = useMemo(() => {
-      const account = accounts.find(a => a.id === trade.accountId);
-      return account?.currencySymbol || '$';
-    }, [accounts, trade.accountId]);
-
     return (
       <div
         className="relative rounded-2xl overflow-hidden"
@@ -266,7 +261,7 @@ const SwipeableTradeItem: React.FC<{
                       className="font-mono font-bold text-sm"
                       style={{ color: net >= 0 ? winColor : lossColor }}
                     >
-                      {net >= 0 ? '+' : '-'}{currencySymbol}{Math.abs(net).toFixed(2)}
+                      {net >= 0 ? '+' : ''}${net.toFixed(2)}
                     </p>
                   );
                 })()}
@@ -335,7 +330,7 @@ const SwipeableTradeItem: React.FC<{
                         className="font-mono font-bold"
                         style={{ color: net >= 0 ? winColor : lossColor }}
                       >
-                        {net >= 0 ? '+' : '-'}{currencySymbol}{Math.abs(net).toFixed(2)}
+                        {net >= 0 ? '+' : ''}${net.toFixed(2)}
                       </p>
                     );
                   })()}
@@ -590,18 +585,72 @@ const SwipeableTradeItem: React.FC<{
                       )}
                     </div>
 
-                    <PhotoAnnotator
-                      isOpen={showPhotoAnnotator}
-                      onClose={() => setShowPhotoAnnotator(false)}
-                      onSave={(dataUrl) => {
-                        setEditForm(prev => ({
-                          ...prev,
-                          photos: [...prev.photos, dataUrl]
-                        }));
+                    <input
+                      ref={imageUploadRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          if (!file.type.startsWith('image/')) {
+                            alert('Please select an image file');
+                            if (imageUploadRef.current) imageUploadRef.current.value = '';
+                            return;
+                          }
+                          if (editForm.photos.length >= 2) {
+                            alert('Maximum 2 screenshots allowed');
+                            if (imageUploadRef.current) imageUploadRef.current.value = '';
+                            return;
+                          }
+
+                          // Use image service for proper compression (handles 12MP images like 3060x4080)
+                          const fileSizeMB = file.size / (1024 * 1024);
+                          if (fileSizeMB > 15) {
+                            alert('Image file is too large (over 15MB). Please use a smaller image.');
+                            if (imageUploadRef.current) imageUploadRef.current.value = '';
+                            return;
+                          }
+
+                          try {
+                            // Show loading state could be added here
+                            const { uploadImage } = await import('../utils/imageService');
+
+                            // Adjust compression based on file size
+                            let maxDimension = 1000;
+                            let quality = 0.72;
+                            if (fileSizeMB > 2) {
+                              maxDimension = 800;
+                              quality = 0.65;
+                            } else if (fileSizeMB > 1) {
+                              maxDimension = 900;
+                              quality = 0.7;
+                            }
+
+                            const result = await uploadImage(file, {
+                              maxDimension,
+                              quality,
+                              maxSizeMB: 15
+                            });
+
+                            if (result.success && result.dataUrl) {
+                              setEditForm({ ...editForm, photos: [...editForm.photos, result.dataUrl] });
+                            } else {
+                              const errorMsg = result.error || 'Failed to process image';
+                              if (errorMsg.includes('too large') || errorMsg.includes('resolution')) {
+                                alert('Image is too large or high resolution. Please try a smaller image (under 10MP recommended).');
+                              } else {
+                                alert(errorMsg);
+                              }
+                            }
+                          } catch (error) {
+                            console.error('Failed to process image:', error);
+                            alert('Failed to process image. Please try again.');
+                          } finally {
+                            if (imageUploadRef.current) imageUploadRef.current.value = '';
+                          }
+                        }
                       }}
-                      strategies={strategies}
-                      theme={theme}
-                      isLightTheme={isLightTheme}
                     />
                   </div>
 
@@ -888,7 +937,7 @@ const AccountCreationModal: React.FC<{
   const [formData, setFormData] = useState({ name: '', broker: '', startingBalance: '' });
 
   const handleSubmit = () => {
-    if (formData.name && formData.startingBalance) {
+    if (formData.name && formData.broker && formData.startingBalance) {
       addAccount({
         id: `acc_${Date.now()}`,
         name: formData.name,
@@ -972,7 +1021,6 @@ const TradeLog = () => {
   const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [fullscreenImageIndex, setFullscreenImageIndex] = useState<number>(0);
   const [fullscreenImageList, setFullscreenImageList] = useState<string[]>([]);
-  const [showPhotoViewer, setShowPhotoViewer] = useState(false);
   const [showAddAccountPrompt, setShowAddAccountPrompt] = useState(false);
   const [deletedTrade, setDeletedTrade] = useState<{ trade: Trade; timeoutId: NodeJS.Timeout } | null>(null);
   const [swipedTradeId, setSwipedTradeId] = useState<string | null>(null);
@@ -1274,13 +1322,7 @@ const TradeLog = () => {
               </div>
               <p className={`mb-4 ${textSecondary}`}>No trades logged yet</p>
               <button
-                onClick={() => {
-                  if (visibleAccounts.length === 0) {
-                    setShowAddAccountPrompt(true);
-                  } else {
-                    setIsModalOpen(true);
-                  }
-                }}
+                onClick={() => setIsModalOpen(true)}
                 className="font-bold hover:underline"
                 style={{ color: theme.primary }}
               >
@@ -1358,8 +1400,12 @@ const TradeLog = () => {
                             isEditing={editingTradeId === trade.id}
                             onDelete={() => handleDeleteTrade(trade.id)}
                             onImageClick={(image) => {
+                              // Find all images from this trade
+                              const tradeImages = trade.photos || (trade.photo ? [trade.photo] : []);
+                              const imageIndex = tradeImages.indexOf(image);
+                              setFullscreenImageList(tradeImages);
+                              setFullscreenImageIndex(imageIndex >= 0 ? imageIndex : 0);
                               setFullscreenImage(image);
-                              setShowPhotoViewer(true);
                             }}
                             viewMode={viewMode}
                           />
@@ -1555,8 +1601,11 @@ const TradeLog = () => {
                                       <button
                                         onClick={(e) => {
                                           e.stopPropagation();
+                                          const tradeImages = trade.photos || (trade.photo ? [trade.photo] : []);
+                                          const photoIndex = tradeImages.indexOf(photo);
+                                          setFullscreenImageList(tradeImages);
+                                          setFullscreenImageIndex(photoIndex >= 0 ? photoIndex : 0);
                                           setFullscreenImage(photo);
-                                          setShowPhotoViewer(true);
                                         }}
                                         className="w-full rounded-xl overflow-hidden border transition-all hover:opacity-90 active:scale-[0.98]"
                                         style={{ borderColor: `${theme.primary}30` }}
@@ -1713,20 +1762,24 @@ const TradeLog = () => {
         </div>
       )}
 
-      {/* Photo Viewer (using PhotoAnnotator in viewOnly mode) */}
-      <PhotoAnnotator
-        isOpen={showPhotoViewer}
-        onClose={() => {
-          setShowPhotoViewer(false);
-          setFullscreenImage(null);
-        }}
-        onSave={() => { }} // Not used in viewOnly
-        strategies={strategies}
-        theme={theme}
-        isLightTheme={isLightTheme}
-        initialImageUrl={fullscreenImage || undefined}
-        viewOnly={false}
-      />
+      {/* Enhanced Photo Viewer */}
+      {fullscreenImage && fullscreenImageList.length > 0 && (
+        <EnhancedPhotoViewer
+          images={fullscreenImageList}
+          currentIndex={fullscreenImageIndex}
+          isOpen={true}
+          onClose={() => {
+            setFullscreenImage(null);
+            setFullscreenImageList([]);
+            setFullscreenImageIndex(0);
+          }}
+          onNavigate={(index) => {
+            setFullscreenImageIndex(index);
+            setFullscreenImage(fullscreenImageList[index]);
+          }}
+          theme={theme}
+        />
+      )}
     </div>
   );
 };

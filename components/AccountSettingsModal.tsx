@@ -2,6 +2,9 @@ import React, { useState, useRef } from 'react';
 import { X, Plus, Trash2, Building2, Wallet, Edit2, Check, Eye, EyeOff, AlertCircle, Camera, Download, Upload, ToggleLeft, ToggleRight, Database, Clock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { TradingAccount } from '../types';
+import CurrencySelector from './CurrencySelector';
+
+const CURRENCY_SYMBOLS = ['$', '£', '€', '¥', '₹', '₽', '₪', '₩', '₫', '฿', '₺', '₴', 'R', '₵', 'Sh'];
 
 // Avatar options - using different styles and seeds for variety
 const AVATAR_OPTIONS = [
@@ -35,9 +38,9 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(user?.name || '');
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const [newAccount, setNewAccount] = useState({ name: '', broker: '', startingBalance: '' });
+  const [newAccount, setNewAccount] = useState({ name: '', broker: '', startingBalance: '', currencySymbol: '$' });
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', broker: '', startingBalance: '' });
+  const [editForm, setEditForm] = useState({ name: '', broker: '', startingBalance: '', currencySymbol: '$' });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
@@ -67,7 +70,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
     setImportStatus(null);
     const result = await importData(file);
     setImportStatus({ type: result.success ? 'success' : 'error', message: result.message });
-    
+
     // Clear the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -76,19 +79,20 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
 
   const handleAddAccount = () => {
     if (!newAccount.name.trim()) return;
-    
+
     const account: TradingAccount = {
       id: `account_${Date.now()}`,
       name: newAccount.name.trim(),
       broker: newAccount.broker.trim() || undefined,
       startingBalance: parseFloat(newAccount.startingBalance) || 0,
+      currencySymbol: newAccount.currencySymbol,
       isMain: false,
       isHidden: false,
       createdAt: new Date().toISOString()
     };
-    
+
     addAccount(account);
-    setNewAccount({ name: '', broker: '', startingBalance: '' });
+    setNewAccount({ name: '', broker: '', startingBalance: '', currencySymbol: '$' });
     setShowAddAccount(false);
   };
 
@@ -97,7 +101,8 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
     setEditForm({
       name: account.name,
       broker: account.broker || '',
-      startingBalance: account.startingBalance.toString()
+      startingBalance: account.startingBalance.toString(),
+      currencySymbol: account.currencySymbol || '$'
     });
   };
 
@@ -106,7 +111,8 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
     updateAccount(id, {
       name: editForm.name.trim(),
       broker: editForm.broker.trim() || undefined,
-      startingBalance: parseFloat(editForm.startingBalance) || 0
+      startingBalance: parseFloat(editForm.startingBalance) || 0,
+      currencySymbol: editForm.currencySymbol
     });
     setEditingAccountId(null);
   };
@@ -138,31 +144,28 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
         <div className="flex border-b border-slate-800">
           <button
             onClick={() => setActiveTab('profile')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'profile'
-                ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'profile'
+              ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             Profile
           </button>
           <button
             onClick={() => setActiveTab('accounts')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'accounts'
-                ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'accounts'
+              ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             Accounts
           </button>
           <button
             onClick={() => setActiveTab('backup')}
-            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${
-              activeTab === 'backup'
-                ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
-                : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'backup'
+              ? 'text-brand-400 border-b-2 border-brand-500 bg-brand-500/5'
+              : 'text-slate-400 hover:text-white'
+              }`}
           >
             Backup
           </button>
@@ -174,14 +177,14 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
             <div className="space-y-6">
               {/* Profile Picture */}
               <div className="flex items-center gap-4">
-                <button 
+                <button
                   onClick={() => setShowAvatarPicker(!showAvatarPicker)}
                   className="relative group"
                 >
-                  <img 
-                    src={getCurrentAvatar()} 
-                    alt="User" 
-                    className="w-20 h-20 rounded-full border-4 border-slate-700 group-hover:border-brand-500 transition-colors" 
+                  <img
+                    src={getCurrentAvatar()}
+                    alt="User"
+                    className="w-20 h-20 rounded-full border-4 border-slate-700 group-hover:border-brand-500 transition-colors"
                   />
                   <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                     <Camera size={24} className="text-white" />
@@ -198,7 +201,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                 <div className="p-4 bg-slate-800/50 rounded-xl border border-slate-700">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="text-sm font-bold text-white">Choose Your Avatar</h4>
-                    <button 
+                    <button
                       onClick={() => setShowAvatarPicker(false)}
                       className="text-slate-500 hover:text-white transition-colors"
                     >
@@ -210,15 +213,14 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                       <button
                         key={avatar.id}
                         onClick={() => handleSelectAvatar(avatar.url)}
-                        className={`w-full aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-105 ${
-                          user?.avatar === avatar.url 
-                            ? 'border-brand-500 ring-2 ring-brand-500/30' 
-                            : 'border-slate-700 hover:border-slate-500'
-                        }`}
+                        className={`w-full aspect-square rounded-xl overflow-hidden border-2 transition-all hover:scale-105 ${user?.avatar === avatar.url
+                          ? 'border-brand-500 ring-2 ring-brand-500/30'
+                          : 'border-slate-700 hover:border-slate-500'
+                          }`}
                       >
-                        <img 
-                          src={avatar.url} 
-                          alt={avatar.id} 
+                        <img
+                          src={avatar.url}
+                          alt={avatar.id}
                           className="w-full h-full object-cover bg-slate-900"
                         />
                       </button>
@@ -340,13 +342,22 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                     </div>
                     <div>
                       <label className="text-xs text-slate-500 mb-1 block">Starting Balance *</label>
-                      <input
-                        type="number"
-                        placeholder="e.g., 10000"
-                        value={newAccount.startingBalance}
-                        onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
-                        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
-                      />
+                      <div className="flex gap-2">
+                        <div className="w-20">
+                          <CurrencySelector
+                            value={newAccount.currencySymbol}
+                            onChange={(val) => setNewAccount({ ...newAccount, currencySymbol: val })}
+                          />
+                        </div>
+                        <input
+                          type="number"
+                          placeholder="e.g., 10000"
+                          value={newAccount.startingBalance}
+                          onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
+                          className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                          style={{ height: '42px' }}
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-4">
@@ -400,12 +411,21 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                       </div>
                       <div>
                         <label className="text-xs text-slate-500 mb-1 block">Starting Balance *</label>
-                        <input
-                          type="number"
-                          value={editForm.startingBalance}
-                          onChange={e => setEditForm({ ...editForm, startingBalance: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
-                        />
+                        <div className="flex gap-2">
+                          <div className="w-20">
+                            <CurrencySelector
+                              value={editForm.currencySymbol}
+                              onChange={(val) => setEditForm({ ...editForm, currencySymbol: val })}
+                            />
+                          </div>
+                          <input
+                            type="number"
+                            value={editForm.startingBalance}
+                            onChange={e => setEditForm({ ...editForm, startingBalance: e.target.value })}
+                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                            style={{ height: '42px' }}
+                          />
+                        </div>
                       </div>
                       <div className="flex gap-2 pt-2">
                         <button
@@ -449,9 +469,8 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                     <>
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-3">
-                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                            account.isMain ? 'bg-brand-500/20 text-brand-400' : 'bg-slate-700 text-slate-400'
-                          }`}>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${account.isMain ? 'bg-brand-500/20 text-brand-400' : 'bg-slate-700 text-slate-400'
+                            }`}>
                             <Wallet size={20} />
                           </div>
                           <div>
@@ -494,15 +513,14 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Starting Balance</p>
                           <p className="text-lg font-mono font-bold text-white">
-                            ${account.startingBalance.toLocaleString()}
+                            {account.currencySymbol || '$'}{account.startingBalance.toLocaleString()}
                           </p>
                         </div>
                         <div>
                           <p className="text-xs text-slate-500 mb-1">Current Balance</p>
-                          <p className={`text-lg font-mono font-bold ${
-                            getAccountBalance(account.id) >= account.startingBalance ? 'text-emerald-400' : 'text-rose-400'
-                          }`}>
-                            ${getAccountBalance(account.id).toLocaleString()}
+                          <p className={`text-lg font-mono font-bold ${getAccountBalance(account.id) >= account.startingBalance ? 'text-emerald-400' : 'text-rose-400'
+                            }`}>
+                            {account.currencySymbol || '$'}{getAccountBalance(account.id).toLocaleString()}
                           </p>
                         </div>
                       </div>
@@ -527,7 +545,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                         <div className="flex items-center gap-3">
                           <Wallet size={16} className="text-slate-600" />
                           <span className="text-slate-500">{account.name}</span>
-                          <span className="text-xs text-slate-600 font-mono">${account.startingBalance.toLocaleString()}</span>
+                          <span className="text-xs text-slate-600 font-mono">{account.currencySymbol || '$'}{account.startingBalance.toLocaleString()}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <button
@@ -579,13 +597,24 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                       </div>
                       <div>
                         <label className="text-xs text-slate-500 mb-1 block">Starting Balance *</label>
-                        <input
-                          type="number"
-                          placeholder="e.g., 10000"
-                          value={newAccount.startingBalance}
-                          onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
-                          className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
-                        />
+                        <div className="flex gap-2">
+                          <select
+                            value={newAccount.currencySymbol}
+                            onChange={e => setNewAccount({ ...newAccount, currencySymbol: e.target.value })}
+                            className="w-20 bg-slate-950 border border-slate-700 rounded-lg px-2 py-2 text-white text-sm focus:border-brand-500 outline-none appearance-none cursor-pointer"
+                          >
+                            {CURRENCY_SYMBOLS.map(sym => (
+                              <option key={sym} value={sym}>{sym}</option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            placeholder="e.g., 10000"
+                            value={newAccount.startingBalance}
+                            onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
+                            className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:border-brand-500 outline-none"
+                          />
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2 mt-4">
@@ -649,7 +678,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-white">
-                      {settings.lastExportDate 
+                      {settings.lastExportDate
                         ? new Date(settings.lastExportDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
                         : 'Never'
                       }
@@ -698,11 +727,10 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                   Select Backup File
                 </button>
                 {importStatus && (
-                  <div className={`mt-3 p-3 rounded-lg text-sm ${
-                    importStatus.type === 'success' 
-                      ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
-                      : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
-                  }`}>
+                  <div className={`mt-3 p-3 rounded-lg text-sm ${importStatus.type === 'success'
+                    ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-400'
+                    : 'bg-rose-500/10 border border-rose-500/20 text-rose-400'
+                    }`}>
                     {importStatus.message}
                   </div>
                 )}
@@ -741,7 +769,7 @@ const AccountSettingsModal: React.FC<AccountSettingsModalProps> = ({ isOpen, onC
                 <div className="flex gap-2 items-start">
                   <AlertCircle size={16} className="text-amber-500 mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-amber-500/80">
-                    <span className="font-bold">Important:</span> Keep your backup files safe. If you forget your PIN 
+                    <span className="font-bold">Important:</span> Keep your backup files safe. If you forget your PIN
                     and need to reset the app, you can restore your data from a backup.
                   </p>
                 </div>

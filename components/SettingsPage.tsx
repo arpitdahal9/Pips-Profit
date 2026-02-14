@@ -1,8 +1,10 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { User, Wallet, Download, Upload, Camera, Edit2, Trash2, Plus, Eye, EyeOff, Palette, Check, Heart, X, ChevronDown, ChevronUp, MessageSquare, Cloud, Coffee } from 'lucide-react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { User, Wallet, Download, Upload, Camera, Edit2, Trash2, Plus, Eye, EyeOff, Palette, Check, Heart, X, ChevronDown, ChevronUp, MessageSquare, Cloud, Coffee, Lock } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useTheme, THEMES, ThemeId } from '../context/ThemeContext';
 import { TradingAccount } from '../types';
+import CurrencySelector from './CurrencySelector';
 import { logoutUser } from '../src/authService';
 import { useAuthModal } from '../context/AuthModalContext';
 
@@ -20,24 +22,26 @@ const AVATAR_OPTIONS = [
 
 const FEATURE_REQUEST_ENDPOINT = 'https://formspree.io/f/xreeojqb';
 
+const CURRENCY_SYMBOLS = ['$', '£', '€', '¥', '₹', '₽', '₪', '₩', '₫', '฿', '₺', '₴', 'R', '₵', 'Sh'];
+
 const SettingsPage: React.FC = () => {
   const { openAuthModal } = useAuthModal();
-  const { 
-    user, updateUser, accounts, addAccount, updateAccount, deleteAccount, 
+  const {
+    user, updateUser, accounts, addAccount, updateAccount, deleteAccount,
     getAccountBalance, trades, settings,
     cloudUser, syncStatus, isMigrating, forceSyncNow, syncToast,
-    exportData, importData 
+    exportData, importData
   } = useStore();
   const { theme, themeId, setTheme, isLightTheme } = useTheme();
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingName, setEditingName] = useState(false);
   const [tempName, setTempName] = useState(user?.name || '');
   const [showAddAccount, setShowAddAccount] = useState(false);
-  const [newAccount, setNewAccount] = useState({ name: '', startingBalance: '' });
+  const [newAccount, setNewAccount] = useState({ name: '', startingBalance: '', currencySymbol: '$' });
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', startingBalance: '' });
+  const [editForm, setEditForm] = useState({ name: '', startingBalance: '', currencySymbol: '$' });
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
   const avatarUploadRef = useRef<HTMLInputElement>(null);
@@ -51,6 +55,16 @@ const SettingsPage: React.FC = () => {
   const [isThemeExpanded, setIsThemeExpanded] = useState(true);
   const [isBackupExpanded, setIsBackupExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<'accounts' | 'theme'>('accounts');
+  const location = useLocation();
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('requestFeature') === 'true') {
+      setShowFeatureRequest(true);
+      // Clean up the URL to prevent re-opening on manual refresh/nav if needed
+      // But usually just showing it once per nav is fine
+    }
+  }, [location.search]);
 
   // Theme-aware colors
   const textPrimary = isLightTheme ? 'text-slate-800' : 'text-white';
@@ -71,11 +85,12 @@ const SettingsPage: React.FC = () => {
         id: `acc_${Date.now()}`,
         name: newAccount.name,
         startingBalance: parseFloat(newAccount.startingBalance),
+        currencySymbol: newAccount.currencySymbol,
         createdAt: new Date().toISOString(),
         isMain: false,
         isHidden: false,
       });
-      setNewAccount({ name: '', startingBalance: '' });
+      setNewAccount({ name: '', startingBalance: '', currencySymbol: '$' });
       setShowAddAccount(false);
     }
   };
@@ -85,6 +100,7 @@ const SettingsPage: React.FC = () => {
     setEditForm({
       name: account.name,
       startingBalance: account.startingBalance.toString(),
+      currencySymbol: account.currencySymbol || '$',
     });
   };
 
@@ -93,6 +109,7 @@ const SettingsPage: React.FC = () => {
       updateAccount(editingAccountId, {
         name: editForm.name,
         startingBalance: parseFloat(editForm.startingBalance),
+        currencySymbol: editForm.currencySymbol,
       });
       setEditingAccountId(null);
     }
@@ -122,7 +139,7 @@ const SettingsPage: React.FC = () => {
         setTimeout(() => setImportStatus(null), 3000);
         return;
       }
-      
+
       // Check file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
         setImportStatus({ type: 'error', message: 'Image size must be less than 5MB' });
@@ -143,7 +160,7 @@ const SettingsPage: React.FC = () => {
         setTimeout(() => setImportStatus(null), 3000);
       };
       reader.readAsDataURL(file);
-      
+
       if (avatarUploadRef.current) avatarUploadRef.current.value = '';
     }
   };
@@ -224,12 +241,12 @@ const SettingsPage: React.FC = () => {
   }, [trades]);
 
   return (
-    <div 
+    <div
       className="flex-1 h-full overflow-y-auto custom-scrollbar pb-20"
       style={{ background: theme.bgGradient, backgroundSize: '400% 400%', animation: 'gradientShift 15s ease infinite' }}
     >
       <div className="px-4 pt-4 pb-6 max-w-lg mx-auto">
-        
+
         {/* Header */}
         <div className="mb-4">
           <h1 className={`text-xl font-bold ${textPrimary}`}>Accounts</h1>
@@ -239,18 +256,16 @@ const SettingsPage: React.FC = () => {
         <div className="mb-6 flex gap-2 p-1 rounded-xl" style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(30,64,175,0.25)' }}>
           <button
             onClick={() => setActiveTab('accounts')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'accounts' ? 'text-white shadow-md' : isLightTheme ? 'text-slate-700' : 'text-slate-400'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'accounts' ? 'text-white shadow-md' : isLightTheme ? 'text-slate-700' : 'text-slate-400'
+              }`}
             style={activeTab === 'accounts' ? { backgroundColor: theme.primary } : {}}
           >
             Accounts
           </button>
           <button
             onClick={() => setActiveTab('theme')}
-            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeTab === 'theme' ? 'text-white shadow-md' : isLightTheme ? 'text-slate-700' : 'text-slate-400'
-            }`}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'theme' ? 'text-white shadow-md' : isLightTheme ? 'text-slate-700' : 'text-slate-400'
+              }`}
             style={activeTab === 'theme' ? { backgroundColor: theme.primary } : {}}
           >
             Theme & Support
@@ -258,242 +273,437 @@ const SettingsPage: React.FC = () => {
         </div>
 
         {activeTab === 'accounts' && (
-        <>
-        {/* Profile Pic & Stats Header */}
-        <div className={`p-6 rounded-2xl mb-6 ${cardBg}`} style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}>
-          <div className="flex flex-col items-center text-center">
-            <div className="relative">
-              <img
-                src={user?.avatarUrl || AVATAR_OPTIONS[0].url}
-                alt="Avatar"
-                className="w-24 h-24 rounded-2xl object-cover"
-                style={{ border: `2px solid ${theme.primary}` }}
-              />
-              <button
-                onClick={() => setShowAvatarPicker(true)}
-                className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl flex items-center justify-center text-white"
-                style={{ backgroundColor: theme.primary }}
-              >
-                <Camera size={14} />
-              </button>
-            </div>
-            <div className="mt-3">
-              {editingName ? (
-                <input
-                  type="text"
-                  value={tempName}
-                  onChange={(e) => setTempName(e.target.value)}
-                  onBlur={handleSaveName}
-                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
-                  className={`rounded-lg px-3 py-2 text-lg font-bold outline-none w-full ${textPrimary}`}
-                  style={{ 
-                    backgroundColor: inputBg,
-                    border: `1px solid ${theme.primary}50`
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <div className="flex items-center justify-center gap-2">
-                  <h2 className={`text-xl font-bold ${textPrimary}`}>{user?.name || 'Trader'}</h2>
-                  <button 
-                    onClick={() => setEditingName(true)} 
-                    className={textSecondary}
-                    style={{ color: theme.primary }}
+          <>
+            {/* Profile Pic & Stats Header */}
+            <div className={`p-6 rounded-2xl mb-6 ${cardBg}`} style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}>
+              <div className="flex flex-col items-center text-center">
+                <div className="relative">
+                  <img
+                    src={user?.avatarUrl || AVATAR_OPTIONS[0].url}
+                    alt="Avatar"
+                    className="w-24 h-24 rounded-2xl object-cover"
+                    style={{ border: `2px solid ${theme.primary}` }}
+                  />
+                  <button
+                    onClick={() => setShowAvatarPicker(true)}
+                    className="absolute -bottom-1 -right-1 w-8 h-8 rounded-xl flex items-center justify-center text-white"
+                    style={{ backgroundColor: theme.primary }}
                   >
-                    <Edit2 size={14} />
+                    <Camera size={14} />
                   </button>
                 </div>
-              )}
-              <p className={`text-[10px] uppercase mt-1 ${textSecondary}`}>Profile</p>
-            </div>
-          </div>
-
-          <div className="mt-5">
-            <div className="grid grid-cols-3 text-center text-[10px] uppercase gap-2">
-              <span className={textSecondary}>Trades</span>
-              <span className={textSecondary}>Win Rate</span>
-              <span className={textSecondary}>Accounts</span>
-            </div>
-            <div className="grid grid-cols-3 text-center mt-1 gap-2">
-              <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalTrades}</span>
-              <span className="text-lg font-bold font-mono" style={{ color: theme.primary }}>{userStats.winRate}%</span>
-              <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalAccounts}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mt-5">
-            <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
-              <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strongest Pair</p>
-              <p className={`text-sm font-semibold ${textPrimary}`}>{strongestPair}</p>
-            </div>
-            <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
-              <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>All time high record</p>
-              <p className={`text-sm font-semibold ${textPrimary}`}>{bestTradePnl}</p>
-            </div>
-          </div>
-
-          <div className="mt-4">
-            <p className={`text-sm font-semibold mb-2 ${textPrimary}`}>Psychology</p>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
-                <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strength</p>
-                <p className={`text-xs ${textPrimary}`}>{psychologyStrength}</p>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
-                <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Weakness</p>
-                <p className={`text-xs ${textPrimary}`}>{psychologyWeakness}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Cloud Sync */}
-        <div
-          className={`p-5 rounded-2xl mb-6 ${cardBg}`}
-          style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-        >
-          <div className="flex items-center gap-3 mb-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `${theme.primary}20` }}
-            >
-              <Cloud size={18} style={{ color: theme.primary }} />
-            </div>
-            <div className="flex-1">
-              <h3 className={`font-bold ${textPrimary}`}>Cloud Sync</h3>
-              <p className={`text-xs ${textSecondary}`}>
-                {cloudUser ? 'Sync enabled for this account' : 'Offline only for now'}
-              </p>
-            </div>
-            <span
-              className={`text-[10px] uppercase px-2 py-1 rounded-full font-semibold ${
-                syncStatus === 'synced'
-                  ? 'text-emerald-500 bg-emerald-500/10'
-                  : syncStatus === 'syncing'
-                    ? 'text-amber-500 bg-amber-500/10'
-                    : 'text-slate-400 bg-slate-400/10'
-              }`}
-            >
-              {syncStatus === 'synced' ? 'Backed up & synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline only'}
-            </span>
-          </div>
-
-          {!cloudUser && (
-            <p className={`text-xs mb-3 ${textSecondary}`}>
-              Offline only (not backed up). 🔒 Sign in to back up your trades across devices.
-            </p>
-          )}
-
-          {isMigrating && (
-            <p className={`text-xs mb-3 ${textSecondary}`}>Backing up your trades...</p>
-          )}
-
-          {cloudUser ? (
-            <div className="space-y-3">
-              <p className={`text-xs ${textSecondary}`}>{cloudUser.email || 'Signed in'}</p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={async () => {
-                    try {
-                      await forceSyncNow();
-                    } catch (error) {
-                      // Sync toast handled in StoreContext
-                    }
-                  }}
-                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
-                  style={{ backgroundColor: theme.primary }}
-                >
-                  Force sync now
-                </button>
-                <button
-                  onClick={() => logoutUser()}
-                  className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
-                  style={{ backgroundColor: theme.primary }}
-                >
-                  Sign Out
-                </button>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={openAuthModal}
-              className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-              style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
-            >
-              Sign In / Sign Up
-            </button>
-          )}
-
-          {syncToast && (
-            <p className={`text-xs mt-3 ${textSecondary}`}>{syncToast === 'Sync complete' ? 'Sync complete ✅' : syncToast}</p>
-          )}
-        </div>
-
-        {/* Accounts Section */}
-        <div className="mb-6">
-          <button
-            onClick={() => setIsAccountsExpanded(!isAccountsExpanded)}
-            className="w-full flex items-center justify-between mb-4"
-          >
-            <h2 className={`text-lg font-bold ${textPrimary}`}>Accounts</h2>
-            {isAccountsExpanded ? (
-              <ChevronUp size={20} className={textSecondary} />
-            ) : (
-              <ChevronDown size={20} className={textSecondary} />
-            )}
-          </button>
-          {isAccountsExpanded && (
-            <div className="space-y-4">
-            {accounts.length === 0 ? (
-              <div 
-                className={`p-8 text-center rounded-2xl ${cardBg}`}
-                style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-              >
-                <div 
-                  className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
-                  style={{ backgroundColor: `${theme.primary}15` }}
-                >
-                  <Wallet size={28} style={{ color: theme.primary }} />
+                <div className="mt-3">
+                  {editingName ? (
+                    <input
+                      type="text"
+                      value={tempName}
+                      onChange={(e) => setTempName(e.target.value)}
+                      onBlur={handleSaveName}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                      className={`rounded-lg px-3 py-2 text-lg font-bold outline-none w-full ${textPrimary}`}
+                      style={{
+                        backgroundColor: inputBg,
+                        border: `1px solid ${theme.primary}50`
+                      }}
+                      autoFocus
+                    />
+                  ) : (
+                    <div className="flex items-center justify-center gap-2">
+                      <h2 className={`text-xl font-bold ${textPrimary}`}>{user?.name || 'Trader'}</h2>
+                      <button
+                        onClick={() => setEditingName(true)}
+                        className={textSecondary}
+                        style={{ color: theme.primary }}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                  <p className={`text-[10px] uppercase mt-1 ${textSecondary}`}>Profile</p>
                 </div>
-                <p className={`font-medium mb-2 ${textPrimary}`}>No accounts yet</p>
-                <p className={`text-xs mb-4 ${textSecondary}`}>Add your first trading account</p>
               </div>
-            ) : (
-              accounts.map(account => (
-                <div 
-                  key={account.id} 
-                  className={`p-4 rounded-2xl ${cardBg}`}
-                  style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}15` }}
+
+              <div className="mt-5">
+                <div className="grid grid-cols-3 text-center text-[10px] uppercase gap-2">
+                  <span className={textSecondary}>Trades</span>
+                  <span className={textSecondary}>Win Rate</span>
+                  <span className={textSecondary}>Accounts</span>
+                </div>
+                <div className="grid grid-cols-3 text-center mt-1 gap-2">
+                  <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalTrades}</span>
+                  <span className="text-lg font-bold font-mono" style={{ color: theme.primary }}>{userStats.winRate}%</span>
+                  <span className={`text-lg font-bold font-mono ${textPrimary}`}>{userStats.totalAccounts}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mt-5">
+                <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                  <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strongest Pair</p>
+                  <p className={`text-sm font-semibold ${textPrimary}`}>{strongestPair}</p>
+                </div>
+                <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                  <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>All time high record</p>
+                  <p className={`text-sm font-semibold ${textPrimary}`}>{bestTradePnl}</p>
+                </div>
+              </div>
+
+              <div className="mt-4">
+                <p className={`text-sm font-semibold mb-2 ${textPrimary}`}>Psychology</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Strength</p>
+                    <p className={`text-xs ${textPrimary}`}>{psychologyStrength}</p>
+                  </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}>
+                    <p className={`text-[10px] uppercase mb-1 ${textSecondary}`}>Weakness</p>
+                    <p className={`text-xs ${textPrimary}`}>{psychologyWeakness}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Cloud Sync */}
+            <div
+              className={`p-5 rounded-2xl mb-6 ${cardBg}`}
+              style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <div
+                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: `${theme.primary}20` }}
                 >
-                  {editingAccountId === account.id ? (
-                    <div className="space-y-3">
+                  <Cloud size={18} style={{ color: theme.primary }} />
+                </div>
+                <div className="flex-1">
+                  <h3 className={`font-bold ${textPrimary}`}>Cloud Sync</h3>
+                  <p className={`text-xs ${textSecondary}`}>
+                    {cloudUser ? 'Sync enabled for this account' : 'Offline only for now'}
+                  </p>
+                </div>
+                <span
+                  className={`text-[10px] uppercase px-2 py-1 rounded-full font-semibold ${syncStatus === 'synced'
+                    ? 'text-emerald-500 bg-emerald-500/10'
+                    : syncStatus === 'syncing'
+                      ? 'text-amber-500 bg-amber-500/10'
+                      : 'text-slate-400 bg-slate-400/10'
+                    }`}
+                >
+                  {syncStatus === 'synced' ? 'Backed up & synced' : syncStatus === 'syncing' ? 'Syncing…' : 'Offline only'}
+                </span>
+              </div>
+
+              {!cloudUser && (
+                <p className={`text-xs mb-3 ${textSecondary}`}>
+                  Offline only (not backed up). 🔒 Sign in to back up your trades across devices.
+                </p>
+              )}
+
+              {isMigrating && (
+                <p className={`text-xs mb-3 ${textSecondary}`}>Backing up your trades...</p>
+              )}
+
+              {cloudUser ? (
+                <div className="space-y-3">
+                  <p className={`text-xs ${textSecondary}`}>{cloudUser.email || 'Signed in'}</p>
+                  <div className="flex flex-col gap-2">
+                    <button
+                      onClick={async () => {
+                        try {
+                          await forceSyncNow();
+                        } catch (error) {
+                          // Sync toast handled in StoreContext
+                        }
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
+                      style={{ backgroundColor: theme.primary }}
+                    >
+                      Force sync now
+                    </button>
+                    <button
+                      onClick={() => logoutUser()}
+                      className="w-full px-3 py-2 text-xs font-semibold rounded-xl text-white"
+                      style={{ backgroundColor: theme.primary }}
+                    >
+                      Sign Out
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={openAuthModal}
+                  className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+                  style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+                >
+                  <User size={18} /> Sign In / Sign Up
+                </button>
+              )}
+
+              {/* Lockout Settings */}
+              <div className="mt-6 pt-6 border-t border-slate-700/30">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center">
+                    <Lock size={16} className="text-indigo-400" />
+                  </div>
+                  <div>
+                    <h4 className={`text-sm font-bold ${textPrimary}`}>Security Lockout</h4>
+                    <p className={`text-[10px] ${textSecondary}`}>Require PIN after app switch</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { value: '15', label: '15 Minutes' },
+                    { value: '30', label: '30 Minutes' },
+                    { value: '60', label: '1 Hour' },
+                    { value: 'never', label: 'Never' }
+                  ].map((option) => {
+                    // Extract lockoutTime from localStorage as it's not in global store
+                    const userData = JSON.parse(localStorage.getItem('velox_user') || '{}');
+                    const currentLockout = userData.lockoutTime || '15';
+                    const isSelected = currentLockout === option.value;
+
+                    return (
+                      <button
+                        key={option.value}
+                        onClick={() => {
+                          const updated = { ...userData, lockoutTime: option.value };
+                          localStorage.setItem('velox_user', JSON.stringify(updated));
+                          // Force a re-render by updating dummy state or just rely on next navigation
+                          window.location.reload();
+                        }}
+                        className={`py-2 px-3 rounded-xl text-xs font-medium border transition-all text-center ${isSelected
+                          ? 'border-indigo-500 bg-indigo-500/10 text-indigo-400'
+                          : 'border-slate-700 bg-slate-800/50 text-slate-500 hover:border-slate-600'
+                          }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {syncToast && (
+                <p className={`text-xs mt-3 ${textSecondary}`}>{syncToast === 'Sync complete' ? 'Sync complete ✅' : syncToast}</p>
+              )}
+            </div>
+
+            {/* Accounts Section */}
+            <div className="mb-6">
+              <button
+                onClick={() => setIsAccountsExpanded(!isAccountsExpanded)}
+                className="w-full flex items-center justify-between mb-4"
+              >
+                <h2 className={`text-lg font-bold ${textPrimary}`}>Accounts</h2>
+                {isAccountsExpanded ? (
+                  <ChevronUp size={20} className={textSecondary} />
+                ) : (
+                  <ChevronDown size={20} className={textSecondary} />
+                )}
+              </button>
+              {isAccountsExpanded && (
+                <div className="space-y-4">
+                  {accounts.length === 0 ? (
+                    <div
+                      className={`p-8 text-center rounded-2xl ${cardBg}`}
+                      style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                    >
+                      <div
+                        className="w-16 h-16 mx-auto mb-4 rounded-2xl flex items-center justify-center"
+                        style={{ backgroundColor: `${theme.primary}15` }}
+                      >
+                        <Wallet size={28} style={{ color: theme.primary }} />
+                      </div>
+                      <p className={`font-medium mb-2 ${textPrimary}`}>No accounts yet</p>
+                      <p className={`text-xs mb-4 ${textSecondary}`}>Add your first trading account</p>
+                    </div>
+                  ) : (
+                    accounts.map(account => (
+                      <div
+                        key={account.id}
+                        className={`p-4 rounded-2xl ${cardBg}`}
+                        style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}15` }}
+                      >
+                        {editingAccountId === account.id ? (
+                          <div className="space-y-3">
+                            <input
+                              type="text"
+                              value={editForm.name}
+                              onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                              placeholder="Account name"
+                              className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
+                              style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
+                            />
+                            <div className="flex gap-2">
+                              <div className="w-20">
+                                <CurrencySelector
+                                  value={editForm.currencySymbol}
+                                  onChange={(val) => setEditForm({ ...editForm, currencySymbol: val })}
+                                />
+                              </div>
+                              <input
+                                type="number"
+                                value={editForm.startingBalance}
+                                onChange={e => setEditForm({ ...editForm, startingBalance: e.target.value })}
+                                placeholder="Starting balance"
+                                className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
+                                style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30`, height: '42px' }}
+                              />
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={handleSaveAccount}
+                                className="flex-1 py-2 text-white rounded-lg text-sm font-bold"
+                                style={{ backgroundColor: theme.primary }}
+                              >
+                                Save
+                              </button>
+                              <button
+                                onClick={() => setEditingAccountId(null)}
+                                className={`flex-1 py-2 rounded-lg text-sm ${textSecondary}`}
+                                style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <div
+                                  className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                  style={{ backgroundColor: `${theme.primary}20` }}
+                                >
+                                  <Wallet size={18} style={{ color: theme.primary }} />
+                                </div>
+                                <div>
+                                  <div className="flex items-center gap-2">
+                                    <h3 className={`font-bold ${textPrimary}`}>{account.name}</h3>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex gap-1 items-center">
+                                <button
+                                  onClick={() => handleEditAccount(account)}
+                                  className={`p-2 rounded-lg ${textSecondary}`}
+                                  title="Edit account"
+                                >
+                                  <Edit2 size={14} />
+                                </button>
+                                <button
+                                  onClick={() => updateAccount(account.id, { isHidden: !account.isHidden })}
+                                  className={`p-2 rounded-lg ${textSecondary}`}
+                                  title={account.isHidden ? 'Show account' : 'Hide account'}
+                                >
+                                  {account.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                                </button>
+                                <button
+                                  onClick={() => setDeleteConfirmId(account.id)}
+                                  className="p-2 rounded-lg"
+                                  style={{ color: theme.secondary }}
+                                  title="Delete account"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div
+                                className="p-3 rounded-xl"
+                                style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                              >
+                                <p className={`text-[10px] uppercase ${textSecondary}`}>Starting</p>
+                                <p className={`font-mono ${textPrimary}`}>{account.currencySymbol || '$'}{account.startingBalance.toLocaleString()}</p>
+                              </div>
+                              <div
+                                className="p-3 rounded-xl"
+                                style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
+                              >
+                                <p className={`text-[10px] uppercase ${textSecondary}`}>Current</p>
+                                <p className="font-mono" style={{ color: theme.primary }}>{account.currencySymbol || '$'}{getAccountBalance(account.id).toLocaleString()}</p>
+                              </div>
+                            </div>
+
+                            {/* Deposit / Withdraw */}
+                            <div className="mt-3 flex gap-2">
+                              <button
+                                onClick={() => {
+                                  const amountStr = window.prompt('Deposit amount?', '');
+                                  const amount = amountStr ? parseFloat(amountStr) : NaN;
+                                  if (!isNaN(amount) && amount > 0) {
+                                    const current = getAccountBalance(account.id);
+                                    const diff = amount;
+                                    // store new startingBalance so current = starting + trades; we approximate by shifting starting
+                                    updateAccount(account.id, { startingBalance: account.startingBalance + diff });
+                                  }
+                                }}
+                                className="flex-1 py-2 rounded-lg text-xs font-semibold text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/10 transition-colors"
+                              >
+                                Deposit
+                              </button>
+                              <button
+                                onClick={() => {
+                                  const amountStr = window.prompt('Withdraw amount?', '');
+                                  const amount = amountStr ? parseFloat(amountStr) : NaN;
+                                  if (!isNaN(amount) && amount > 0) {
+                                    const current = getAccountBalance(account.id);
+                                    const diff = -amount;
+                                    updateAccount(account.id, { startingBalance: account.startingBalance + diff });
+                                  }
+                                }}
+                                className="flex-1 py-2 rounded-lg text-xs font-semibold text-rose-400 border border-rose-500/40 hover:bg-rose-500/10 transition-colors"
+                              >
+                                Withdraw
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    ))
+                  )}
+
+                  {/* Add Account */}
+                  {showAddAccount ? (
+                    <div
+                      className={`p-4 space-y-3 rounded-2xl ${cardBg}`}
+                      style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                    >
                       <input
                         type="text"
-                        value={editForm.name}
-                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
+                        value={newAccount.name}
+                        onChange={e => setNewAccount({ ...newAccount, name: e.target.value })}
                         placeholder="Account name"
                         className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
                         style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
                       />
-                      <input
-                        type="number"
-                        value={editForm.startingBalance}
-                        onChange={e => setEditForm({ ...editForm, startingBalance: e.target.value })}
-                        placeholder="Starting balance"
-                        className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
-                        style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
-                      />
                       <div className="flex gap-2">
-                        <button 
-                          onClick={handleSaveAccount} 
-                          className="flex-1 py-2 text-white rounded-lg text-sm font-bold"
+                        <div className="w-20">
+                          <CurrencySelector
+                            value={newAccount.currencySymbol}
+                            onChange={(val) => setNewAccount({ ...newAccount, currencySymbol: val })}
+                          />
+                        </div>
+                        <input
+                          type="number"
+                          value={newAccount.startingBalance}
+                          onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
+                          placeholder="Starting balance"
+                          className={`flex-1 rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
+                          style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30`, height: '42px' }}
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleAddAccount}
+                          className="flex-1 py-3 text-white rounded-xl text-sm font-bold"
                           style={{ backgroundColor: theme.primary }}
                         >
-                          Save
+                          Create Account
                         </button>
-                        <button 
-                          onClick={() => setEditingAccountId(null)} 
-                          className={`flex-1 py-2 rounded-lg text-sm ${textSecondary}`}
+                        <button
+                          onClick={() => setShowAddAccount(false)}
+                          className={`flex-1 py-3 rounded-xl text-sm ${textSecondary}`}
                           style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
                         >
                           Cancel
@@ -501,406 +711,270 @@ const SettingsPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <>
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div 
-                            className="w-10 h-10 rounded-xl flex items-center justify-center"
-                            style={{ backgroundColor: `${theme.primary}20` }}
-                          >
-                            <Wallet size={18} style={{ color: theme.primary }} />
-                          </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h3 className={`font-bold ${textPrimary}`}>{account.name}</h3>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-1 items-center">
-                          <button 
-                            onClick={() => handleEditAccount(account)} 
-                            className={`p-2 rounded-lg ${textSecondary}`}
-                            title="Edit account"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button 
-                            onClick={() => updateAccount(account.id, { isHidden: !account.isHidden })} 
-                            className={`p-2 rounded-lg ${textSecondary}`}
-                            title={account.isHidden ? 'Show account' : 'Hide account'}
-                          >
-                            {account.isHidden ? <EyeOff size={14} /> : <Eye size={14} />}
-                          </button>
-                          <button 
-                            onClick={() => setDeleteConfirmId(account.id)} 
-                            className="p-2 rounded-lg"
-                            style={{ color: theme.secondary }}
-                            title="Delete account"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
-                        <div 
-                          className="p-3 rounded-xl"
-                          style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
-                        >
-                          <p className={`text-[10px] uppercase ${textSecondary}`}>Starting</p>
-                          <p className={`font-mono ${textPrimary}`}>${account.startingBalance.toLocaleString()}</p>
-                        </div>
-                        <div 
-                          className="p-3 rounded-xl"
-                          style={{ backgroundColor: isLightTheme ? '#f8fafc' : 'rgba(51,65,85,0.3)' }}
-                        >
-                          <p className={`text-[10px] uppercase ${textSecondary}`}>Current</p>
-                          <p className="font-mono" style={{ color: theme.primary }}>${getAccountBalance(account.id).toLocaleString()}</p>
-                        </div>
-                      </div>
-
-                      {/* Deposit / Withdraw */}
-                      <div className="mt-3 flex gap-2">
-                        <button
-                          onClick={() => {
-                            const amountStr = window.prompt('Deposit amount?', '');
-                            const amount = amountStr ? parseFloat(amountStr) : NaN;
-                            if (!isNaN(amount) && amount > 0) {
-                              const current = getAccountBalance(account.id);
-                              const diff = amount;
-                              // store new startingBalance so current = starting + trades; we approximate by shifting starting
-                              updateAccount(account.id, { startingBalance: account.startingBalance + diff });
-                            }
-                          }}
-                          className="flex-1 py-2 rounded-lg text-xs font-semibold text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/10 transition-colors"
-                        >
-                          Deposit
-                        </button>
-                        <button
-                          onClick={() => {
-                            const amountStr = window.prompt('Withdraw amount?', '');
-                            const amount = amountStr ? parseFloat(amountStr) : NaN;
-                            if (!isNaN(amount) && amount > 0) {
-                              const current = getAccountBalance(account.id);
-                              const diff = -amount;
-                              updateAccount(account.id, { startingBalance: account.startingBalance + diff });
-                            }
-                          }}
-                          className="flex-1 py-2 rounded-lg text-xs font-semibold text-rose-400 border border-rose-500/40 hover:bg-rose-500/10 transition-colors"
-                        >
-                          Withdraw
-                        </button>
-                      </div>
-                    </>
+                    <button
+                      onClick={() => setShowAddAccount(true)}
+                      className={`w-full py-4 rounded-xl border-2 border-dashed transition-all flex items-center justify-center gap-2 ${textSecondary}`}
+                      style={{ borderColor: isLightTheme ? '#cbd5e1' : 'rgba(71,85,105,0.5)' }}
+                    >
+                      <Plus size={18} /> Add Account
+                    </button>
                   )}
                 </div>
-              ))
-            )}
-
-            {/* Add Account */}
-            {showAddAccount ? (
-              <div 
-                className={`p-4 space-y-3 rounded-2xl ${cardBg}`}
-                style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-              >
-                <input
-                  type="text"
-                  value={newAccount.name}
-                  onChange={e => setNewAccount({ ...newAccount, name: e.target.value })}
-                  placeholder="Account name"
-                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
-                  style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
-                />
-                <input
-                  type="number"
-                  value={newAccount.startingBalance}
-                  onChange={e => setNewAccount({ ...newAccount, startingBalance: e.target.value })}
-                  placeholder="Starting balance"
-                  className={`w-full rounded-lg px-3 py-2 text-sm outline-none ${textPrimary}`}
-                  style={{ backgroundColor: inputBg, border: `1px solid ${theme.primary}30` }}
-                />
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleAddAccount} 
-                    className="flex-1 py-3 text-white rounded-xl text-sm font-bold"
-                    style={{ backgroundColor: theme.primary }}
-                  >
-                    Create Account
-                  </button>
-                  <button 
-                    onClick={() => setShowAddAccount(false)} 
-                    className={`flex-1 py-3 rounded-xl text-sm ${textSecondary}`}
-                    style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowAddAccount(true)}
-                className={`w-full py-4 rounded-xl border-2 border-dashed transition-all flex items-center justify-center gap-2 ${textSecondary}`}
-                style={{ borderColor: isLightTheme ? '#cbd5e1' : 'rgba(71,85,105,0.5)' }}
-              >
-                <Plus size={18} /> Add Account
-              </button>
-            )}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Request a Feature Button - Accounts Tab */}
-        <button
-          onClick={() => setShowFeatureRequest(true)}
-          className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2 mb-6"
-          style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
-        >
-          <MessageSquare size={18} /> Request a Feature
-        </button>
-
-        {/* Community Thanks Section - Accounts Tab */}
-        <div 
-          className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
-          style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-          onClick={() => setShowCommunityThanks(true)}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `${theme.primary}20` }}
+            {/* Request a Feature Button - Accounts Tab */}
+            <button
+              onClick={() => setShowFeatureRequest(true)}
+              className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2 mb-6"
+              style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
             >
-              <Heart size={18} style={{ color: theme.primary }} />
-            </div>
-            <div className="flex-1">
-              <h3 className={`font-bold ${textPrimary}`}>Thanks for Community Feedback</h3>
-              <p className={`text-xs ${textSecondary}`}>Tap to see contributors</p>
-            </div>
-          </div>
-        </div>
+              <MessageSquare size={18} /> Request a Feature
+            </button>
 
-        {/* Theme Section */}
-        </>
-        )}
-
-        {activeTab === 'theme' && (
-        <>
-        <div className="mb-6">
-          <button
-            onClick={() => setIsThemeExpanded(!isThemeExpanded)}
-            className="w-full flex items-center justify-between mb-4"
-          >
-            <h2 className={`text-lg font-bold ${textPrimary}`}>Theme & Support</h2>
-            {isThemeExpanded ? (
-              <ChevronUp size={20} className={textSecondary} />
-            ) : (
-              <ChevronDown size={20} className={textSecondary} />
-            )}
-          </button>
-          {isThemeExpanded && (
-            <div className="space-y-4">
-            <div 
-              className={`p-4 rounded-xl ${cardBg}`}
+            {/* Community Thanks Section - Accounts Tab */}
+            <div
+              className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
               style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+              onClick={() => setShowCommunityThanks(true)}
             >
-              <h3 className={`text-sm font-bold mb-3 ${textSecondary}`}>Choose Theme</h3>
-              <div className="grid grid-cols-2 gap-3">
-                {Object.values(THEMES).map((t) => (
-                  <button
-                    key={t.id}
-                    onClick={() => setTheme(t.id as ThemeId)}
-                    className={`relative p-4 rounded-xl text-left transition-all ${
-                      themeId === t.id ? 'ring-2' : ''
-                    }`}
-                    style={{ 
-                      ringColor: themeId === t.id ? t.primary : 'transparent',
-                      background: t.id === 'ledger' ? '#fefce8' : (isLightTheme ? '#f8fafc' : 'rgba(15,23,42,0.8)')
-                    }}
-                  >
-                    {/* Color Preview */}
-                    <div className="flex gap-1 mb-2">
-                      <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.primary }} />
-                      <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.secondary }} />
-                      <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.accent }} />
-                    </div>
-                    <p className={`text-sm font-bold ${t.id === 'ledger' ? 'text-slate-800' : textPrimary}`}>
-                      {t.name}
-                    </p>
-                    <p className={`text-[10px] ${t.id === 'ledger' ? 'text-slate-600' : textSecondary}`}>
-                      {t.description}
-                    </p>
-                    {themeId === t.id && (
-                      <div 
-                        className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
-                        style={{ backgroundColor: t.primary }}
-                      >
-                        <Check size={12} className="text-white" />
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Theme Preview */}
-            <div 
-              className={`p-4 rounded-xl ${cardBg}`}
-              style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-            >
-              <h3 className={`text-sm font-bold mb-3 ${textSecondary}`}>Preview</h3>
-              <div 
-                className="p-4 rounded-xl"
-                style={{ background: theme.cardBg, border: `1px solid ${theme.primary}30` }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div 
-                    className="w-10 h-10 rounded-xl flex items-center justify-center"
-                    style={{ backgroundColor: `${theme.primary}20` }}
-                  >
-                    <span style={{ color: theme.primary }}>📈</span>
-                  </div>
-                  <div>
-                    <p className={`text-sm font-bold ${isLightTheme ? 'text-slate-800' : 'text-white'}`}>Sample Trade</p>
-                    <p className={textSecondary} style={{ fontSize: '12px' }}>EURUSD • Long</p>
-                  </div>
-                </div>
-                <div className="flex gap-2">
-                  <div 
-                    className="flex-1 p-2 rounded-lg text-center"
-                    style={{ backgroundColor: `${theme.primary}15` }}
-                  >
-                    <p className={`text-[10px] ${textSecondary}`}>Profit</p>
-                    <p className="font-mono font-bold" style={{ color: theme.primary }}>+$125.50</p>
-                  </div>
-                  <div 
-                    className="flex-1 p-2 rounded-lg text-center"
-                    style={{ backgroundColor: `${theme.secondary}15` }}
-                  >
-                    <p className={`text-[10px] ${textSecondary}`}>Loss</p>
-                    <p className="font-mono font-bold" style={{ color: theme.secondary }}>-$45.20</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-            </div>
-          )}
-        </div>
-
-        {/* Backup Section */}
-        <div className="mb-6">
-          <button
-            onClick={() => setIsBackupExpanded(!isBackupExpanded)}
-            className="w-full flex items-center justify-between mb-4"
-          >
-            <h2 className={`text-lg font-bold ${textPrimary}`}>Backup</h2>
-            {isBackupExpanded ? (
-              <ChevronUp size={20} className={textSecondary} />
-            ) : (
-              <ChevronDown size={20} className={textSecondary} />
-            )}
-          </button>
-          {isBackupExpanded && (
-            <div className="space-y-4">
-            <div 
-              className={`p-5 rounded-2xl ${cardBg}`}
-              style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div 
+              <div className="flex items-center gap-3">
+                <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center"
                   style={{ backgroundColor: `${theme.primary}20` }}
                 >
-                  <Download size={18} style={{ color: theme.primary }} />
+                  <Heart size={18} style={{ color: theme.primary }} />
                 </div>
-                <div>
-                  <h3 className={`font-bold ${textPrimary}`}>Export Data</h3>
-                  <p className={`text-xs ${textSecondary}`}>Create a backup of all your data</p>
+                <div className="flex-1">
+                  <h3 className={`font-bold ${textPrimary}`}>Thanks for Community Feedback</h3>
+                  <p className={`text-xs ${textSecondary}`}>Tap to see contributors</p>
                 </div>
               </div>
+            </div>
+
+            {/* Theme Section */}
+          </>
+        )}
+
+        {activeTab === 'theme' && (
+          <>
+            <div className="mb-6">
               <button
-                onClick={exportData}
-                className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-                style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+                onClick={() => setIsThemeExpanded(!isThemeExpanded)}
+                className="w-full flex items-center justify-between mb-4"
               >
-                <Download size={18} /> Export Backup
+                <h2 className={`text-lg font-bold ${textPrimary}`}>Theme & Support</h2>
+                {isThemeExpanded ? (
+                  <ChevronUp size={20} className={textSecondary} />
+                ) : (
+                  <ChevronDown size={20} className={textSecondary} />
+                )}
               </button>
-              {settings.lastExportDate && (
-                <p className={`text-xs text-center mt-3 ${textSecondary}`}>
-                  Last export: {new Date(settings.lastExportDate).toLocaleDateString()}
-                </p>
+              {isThemeExpanded && (
+                <div className="space-y-4">
+                  <div
+                    className={`p-4 rounded-xl ${cardBg}`}
+                    style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                  >
+                    <h3 className={`text-sm font-bold mb-3 ${textSecondary}`}>Choose Theme</h3>
+                    <div className="grid grid-cols-2 gap-3">
+                      {Object.values(THEMES).map((t) => (
+                        <button
+                          key={t.id}
+                          onClick={() => setTheme(t.id as ThemeId)}
+                          className={`relative p-4 rounded-xl text-left transition-all ${themeId === t.id ? 'ring-2' : ''
+                            }`}
+                          style={{
+                            ringColor: themeId === t.id ? t.primary : 'transparent',
+                            background: t.id === 'ledger' ? '#fefce8' : (isLightTheme ? '#f8fafc' : 'rgba(15,23,42,0.8)')
+                          }}
+                        >
+                          {/* Color Preview */}
+                          <div className="flex gap-1 mb-2">
+                            <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.primary }} />
+                            <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.secondary }} />
+                            <div className="w-6 h-6 rounded-lg" style={{ backgroundColor: t.accent }} />
+                          </div>
+                          <p className={`text-sm font-bold ${t.id === 'ledger' ? 'text-slate-800' : textPrimary}`}>
+                            {t.name}
+                          </p>
+                          <p className={`text-[10px] ${t.id === 'ledger' ? 'text-slate-600' : textSecondary}`}>
+                            {t.description}
+                          </p>
+                          {themeId === t.id && (
+                            <div
+                              className="absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center"
+                              style={{ backgroundColor: t.primary }}
+                            >
+                              <Check size={12} className="text-white" />
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Theme Preview */}
+                  <div
+                    className={`p-4 rounded-xl ${cardBg}`}
+                    style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                  >
+                    <h3 className={`text-sm font-bold mb-3 ${textSecondary}`}>Preview</h3>
+                    <div
+                      className="p-4 rounded-xl"
+                      style={{ background: theme.cardBg, border: `1px solid ${theme.primary}30` }}
+                    >
+                      <div className="flex items-center gap-3 mb-3">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center"
+                          style={{ backgroundColor: `${theme.primary}20` }}
+                        >
+                          <span style={{ color: theme.primary }}>📈</span>
+                        </div>
+                        <div>
+                          <p className={`text-sm font-bold ${isLightTheme ? 'text-slate-800' : 'text-white'}`}>Sample Trade</p>
+                          <p className={textSecondary} style={{ fontSize: '12px' }}>EURUSD • Long</p>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <div
+                          className="flex-1 p-2 rounded-lg text-center"
+                          style={{ backgroundColor: `${theme.primary}15` }}
+                        >
+                          <p className={`text-[10px] ${textSecondary}`}>Profit</p>
+                          <p className="font-mono font-bold" style={{ color: theme.primary }}>+$125.50</p>
+                        </div>
+                        <div
+                          className="flex-1 p-2 rounded-lg text-center"
+                          style={{ backgroundColor: `${theme.secondary}15` }}
+                        >
+                          <p className={`text-[10px] ${textSecondary}`}>Loss</p>
+                          <p className="font-mono font-bold" style={{ color: theme.secondary }}>-$45.20</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
-            <div 
-              className={`p-5 rounded-2xl ${cardBg}`}
+            {/* Backup Section */}
+            <div className="mb-6">
+              <button
+                onClick={() => setIsBackupExpanded(!isBackupExpanded)}
+                className="w-full flex items-center justify-between mb-4"
+              >
+                <h2 className={`text-lg font-bold ${textPrimary}`}>Backup</h2>
+                {isBackupExpanded ? (
+                  <ChevronUp size={20} className={textSecondary} />
+                ) : (
+                  <ChevronDown size={20} className={textSecondary} />
+                )}
+              </button>
+              {isBackupExpanded && (
+                <div className="space-y-4">
+                  <div
+                    className={`p-5 rounded-2xl ${cardBg}`}
+                    style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: `${theme.primary}20` }}
+                      >
+                        <Download size={18} style={{ color: theme.primary }} />
+                      </div>
+                      <div>
+                        <h3 className={`font-bold ${textPrimary}`}>Export Data</h3>
+                        <p className={`text-xs ${textSecondary}`}>Create a backup of all your data</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={exportData}
+                      className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+                      style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+                    >
+                      <Download size={18} /> Export Backup
+                    </button>
+                    {settings.lastExportDate && (
+                      <p className={`text-xs text-center mt-3 ${textSecondary}`}>
+                        Last export: {new Date(settings.lastExportDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+
+                  <div
+                    className={`p-5 rounded-2xl ${cardBg}`}
+                    style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+                  >
+                    <div className="flex items-center gap-3 mb-4">
+                      <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center"
+                        style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
+                      >
+                        <Upload size={18} className={textSecondary} />
+                      </div>
+                      <div>
+                        <h3 className={`font-bold ${textPrimary}`}>Import Data</h3>
+                        <p className={`text-xs ${textSecondary}`}>Restore from a backup file</p>
+                      </div>
+                    </div>
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileImport}
+                      accept=".json"
+                      className="hidden"
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors`}
+                      style={{
+                        backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)',
+                        color: isLightTheme ? '#475569' : '#e2e8f0'
+                      }}
+                    >
+                      <Upload size={18} /> Import Backup
+                    </button>
+                    {importStatus && (
+                      <p className="text-xs text-center mt-3" style={{ color: importStatus.type === 'success' ? theme.primary : theme.secondary }}>
+                        {importStatus.message}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Request a Feature Button */}
+            <button
+              onClick={() => setShowFeatureRequest(true)}
+              className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
+              style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
+            >
+              <MessageSquare size={18} /> Request a Feature
+            </button>
+
+            {/* Community Thanks Section */}
+            <div
+              className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
               style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
+              onClick={() => setShowCommunityThanks(true)}
             >
-              <div className="flex items-center gap-3 mb-4">
-                <div 
+              <div className="flex items-center gap-3">
+                <div
                   className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
+                  style={{ backgroundColor: `${theme.primary}20` }}
                 >
-                  <Upload size={18} className={textSecondary} />
+                  <Heart size={18} style={{ color: theme.primary }} />
                 </div>
-                <div>
-                  <h3 className={`font-bold ${textPrimary}`}>Import Data</h3>
-                  <p className={`text-xs ${textSecondary}`}>Restore from a backup file</p>
+                <div className="flex-1">
+                  <h3 className={`font-bold ${textPrimary}`}>Thanks for Community Feedback</h3>
+                  <p className={`text-xs ${textSecondary}`}>Tap to see contributors</p>
                 </div>
               </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleFileImport}
-                accept=".json"
-                className="hidden"
-              />
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-colors`}
-                style={{ 
-                  backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)',
-                  color: isLightTheme ? '#475569' : '#e2e8f0'
-                }}
-              >
-                <Upload size={18} /> Import Backup
-              </button>
-              {importStatus && (
-                <p className="text-xs text-center mt-3" style={{ color: importStatus.type === 'success' ? theme.primary : theme.secondary }}>
-                  {importStatus.message}
-                </p>
-              )}
             </div>
-            </div>
-          )}
-        </div>
-
-        {/* Request a Feature Button */}
-        <button
-          onClick={() => setShowFeatureRequest(true)}
-          className="w-full py-3 text-white rounded-xl font-bold flex items-center justify-center gap-2"
-          style={{ backgroundColor: theme.primary, boxShadow: `0 0 20px ${theme.primary}40` }}
-        >
-          <MessageSquare size={18} /> Request a Feature
-        </button>
-
-        {/* Community Thanks Section */}
-        <div 
-          className={`p-5 rounded-2xl ${cardBg} cursor-pointer mb-6`}
-          style={{ background: isLightTheme ? 'white' : theme.cardBg, border: `1px solid ${theme.primary}20` }}
-          onClick={() => setShowCommunityThanks(true)}
-        >
-          <div className="flex items-center gap-3">
-            <div 
-              className="w-10 h-10 rounded-xl flex items-center justify-center"
-              style={{ backgroundColor: `${theme.primary}20` }}
-            >
-              <Heart size={18} style={{ color: theme.primary }} />
-            </div>
-            <div className="flex-1">
-              <h3 className={`font-bold ${textPrimary}`}>Thanks for Community Feedback</h3>
-              <p className={`text-xs ${textSecondary}`}>Tap to see contributors</p>
-            </div>
-          </div>
-        </div>
-        </>
+          </>
         )}
       </div>
 
@@ -993,175 +1067,174 @@ const SettingsPage: React.FC = () => {
 
       {/* Community Thanks Modal */}
       {showCommunityThanks && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-            <div 
-              className="w-full max-w-sm rounded-2xl overflow-hidden"
-              style={{ 
-                background: isLightTheme ? 'white' : theme.cardBg,
-                border: `1px solid ${theme.primary}30`
-              }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              background: isLightTheme ? 'white' : theme.cardBg,
+              border: `1px solid ${theme.primary}30`
+            }}
+          >
+            <div
+              className="p-5"
+              style={{ borderBottom: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
             >
-              <div 
-                className="p-5"
-                style={{ borderBottom: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className={`text-lg font-bold ${textPrimary}`}>Community Contributors</h3>
-                  <button
-                    onClick={() => setShowCommunityThanks(false)}
-                    className={`p-1 hover:bg-slate-800 rounded-lg transition-colors ${textSecondary}`}
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-                <p className={`text-sm ${textSecondary}`}>Thanks for community feedback which helped us upgrade the app</p>
-              </div>
-              <div className="p-5">
-                <div className="mb-4">
-                  <h4 className={`text-sm font-bold mb-3 ${textPrimary}`}>Reddit Community:</h4>
-                  <div className="space-y-2">
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>CoffeeFX</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Even_Competition2461</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Mysterious_Drag_519</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Few-Pepper858</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Peppie79</p>
-                    </div>
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Jerry Sonenarong</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="mb-4">
-                  <h4 className={`text-sm font-bold mb-3 ${textPrimary}`}>Via App Feedback:</h4>
-                  <div className="space-y-2">
-                    <div className={`p-3 rounded-lg ${isLightTheme ? 'bg-slate-50' : 'bg-slate-800/50'}`}>
-                      <p className={`text-sm ${textPrimary}`}>Jamaal</p>
-                    </div>
-                  </div>
-                </div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className={`text-lg font-bold ${textPrimary}`}>Community Contributors</h3>
                 <button
                   onClick={() => setShowCommunityThanks(false)}
-                  className="w-full py-3 rounded-xl font-medium text-white"
-                  style={{ backgroundColor: theme.primary }}
+                  className={`p-1 hover:bg-slate-800 rounded-lg transition-colors ${textSecondary}`}
                 >
-                  Close
+                  <X size={20} />
                 </button>
               </div>
+              <p className={`text-sm ${textSecondary}`}>Thanks for community feedback which helped us upgrade the app</p>
+            </div>
+            <div className="p-5">
+              <div className="mb-4">
+                <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${textSecondary}`}>Reddit Community</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {['CoffeeFX', 'Even_Competition2461', 'Mysterious_Drag_519', 'Few-Pepper858', 'Peppie79', 'Jerry Sonenarong'].map(name => (
+                    <div key={name} className={`px-3 py-2.5 rounded-xl border text-center ${isLightTheme ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/30 border-slate-700/50'}`}>
+                      <p className={`text-[11px] font-bold ${textPrimary}`}>{name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${textSecondary}`}>Via App Feedback</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Jamaal'].map(name => (
+                    <div key={name} className={`px-3 py-2.5 rounded-xl border text-center ${isLightTheme ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/30 border-slate-700/50'}`}>
+                      <p className={`text-[11px] font-bold ${textPrimary}`}>{name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <h4 className={`text-xs font-black uppercase tracking-widest mb-3 ${textSecondary}`}>Play Store</h4>
+                <div className="grid grid-cols-2 gap-2">
+                  {['Serhii Smoliakov', 'Vhutali Ravhuhali', 'Ray Julian', 'Mugesh K'].map(name => (
+                    <div key={name} className={`px-3 py-2.5 rounded-xl border text-center ${isLightTheme ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/30 border-slate-700/50'}`}>
+                      <p className={`text-[11px] font-bold ${textPrimary}`}>{name}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCommunityThanks(false)}
+                className="w-full py-3 rounded-xl font-medium text-white"
+                style={{ backgroundColor: theme.primary }}
+              >
+                Close
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/* Avatar Picker Modal */}
       {showAvatarPicker && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-            <div 
-              className="w-full max-w-sm rounded-2xl overflow-hidden"
-              style={{ 
-                background: isLightTheme ? 'white' : theme.cardBg,
-                border: `1px solid ${theme.primary}30`
-              }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              background: isLightTheme ? 'white' : theme.cardBg,
+              border: `1px solid ${theme.primary}30`
+            }}
+          >
+            <div
+              className="p-4"
+              style={{ borderBottom: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
             >
-              <div 
-                className="p-4"
-                style={{ borderBottom: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
-              >
-                <h3 className={`text-lg font-bold ${textPrimary}`}>Choose Avatar</h3>
-              </div>
-              <div className="grid grid-cols-4 gap-3 p-4">
-                {AVATAR_OPTIONS.map(avatar => (
-                  <button
-                    key={avatar.id}
-                    onClick={() => {
-                      updateUser({ avatarUrl: avatar.url });
-                      setShowAvatarPicker(false);
-                    }}
-                    className="p-1 rounded-xl border-2 transition-all"
-                    style={{ 
-                      borderColor: user?.avatarUrl === avatar.url ? theme.primary : 'transparent'
-                    }}
-                  >
-                    <img src={avatar.url} alt="" className="w-full rounded-lg" />
-                  </button>
-                ))}
-              </div>
-              <div 
-                className="p-4 space-y-2"
-                style={{ borderTop: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }` }}
-              >
-                <input
-                  type="file"
-                  ref={avatarUploadRef}
-                  onChange={handleAvatarUpload}
-                  accept="image/*"
-                  className="hidden"
-                />
+              <h3 className={`text-lg font-bold ${textPrimary}`}>Choose Avatar</h3>
+            </div>
+            <div className="grid grid-cols-4 gap-3 p-4">
+              {AVATAR_OPTIONS.map(avatar => (
                 <button
-                  onClick={() => avatarUploadRef.current?.click()}
-                  className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${textPrimary}`}
-                  style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}
+                  key={avatar.id}
+                  onClick={() => {
+                    updateUser({ avatarUrl: avatar.url });
+                    setShowAvatarPicker(false);
+                  }}
+                  className="p-1 rounded-xl border-2 transition-all"
+                  style={{
+                    borderColor: user?.avatarUrl === avatar.url ? theme.primary : 'transparent'
+                  }}
                 >
-                  <Upload size={16} />
-                  Upload Your Photo
+                  <img src={avatar.url} alt="" className="w-full rounded-lg" />
                 </button>
-                <button
-                  onClick={() => setShowAvatarPicker(false)}
-                  className={`w-full py-3 rounded-xl font-medium ${textSecondary}`}
-                  style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
-                >
-                  Cancel
-                </button>
-              </div>
+              ))}
+            </div>
+            <div
+              className="p-4 space-y-2"
+              style={{ borderTop: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
+            >
+              <input
+                type="file"
+                ref={avatarUploadRef}
+                onChange={handleAvatarUpload}
+                accept="image/*"
+                className="hidden"
+              />
+              <button
+                onClick={() => avatarUploadRef.current?.click()}
+                className={`w-full py-3 rounded-xl font-medium flex items-center justify-center gap-2 ${textPrimary}`}
+                style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}
+              >
+                <Upload size={16} />
+                Upload Your Photo
+              </button>
+              <button
+                onClick={() => setShowAvatarPicker(false)}
+                className={`w-full py-3 rounded-xl font-medium ${textSecondary}`}
+                style={{ backgroundColor: isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)' }}
+              >
+                Cancel
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {deleteConfirmId && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
-            <div 
-              className="w-full max-w-sm rounded-2xl overflow-hidden"
-              style={{ 
-                background: isLightTheme ? 'white' : theme.cardBg,
-                border: `1px solid ${theme.secondary}30`
-              }}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm p-4">
+          <div
+            className="w-full max-w-sm rounded-2xl overflow-hidden"
+            style={{
+              background: isLightTheme ? 'white' : theme.cardBg,
+              border: `1px solid ${theme.secondary}30`
+            }}
+          >
+            <div className="p-5">
+              <h3 className={`text-lg font-bold mb-2 ${textPrimary}`}>Delete Account?</h3>
+              <p className={`text-sm ${textSecondary}`}>This will also delete all trades associated with this account.</p>
+            </div>
+            <div
+              className="flex"
+              style={{ borderTop: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
             >
-              <div className="p-5">
-                <h3 className={`text-lg font-bold mb-2 ${textPrimary}`}>Delete Account?</h3>
-                <p className={`text-sm ${textSecondary}`}>This will also delete all trades associated with this account.</p>
-              </div>
-              <div 
-                className="flex"
-                style={{ borderTop: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}` }}
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className={`flex-1 py-4 text-sm font-medium ${textSecondary}`}
               >
-                <button
-                  onClick={() => setDeleteConfirmId(null)}
-                  className={`flex-1 py-4 text-sm font-medium ${textSecondary}`}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => { deleteAccount(deleteConfirmId); setDeleteConfirmId(null); }}
-                  className="flex-1 py-4 text-sm font-bold"
-                  style={{ 
-                    color: theme.secondary,
-                    borderLeft: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}`
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
+                Cancel
+              </button>
+              <button
+                onClick={() => { deleteAccount(deleteConfirmId); setDeleteConfirmId(null); }}
+                className="flex-1 py-4 text-sm font-bold"
+                style={{
+                  color: theme.secondary,
+                  borderLeft: `1px solid ${isLightTheme ? '#e2e8f0' : 'rgba(51,65,85,0.5)'}`
+                }}
+              >
+                Delete
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
     </div>
   );
 };

@@ -4,6 +4,9 @@ import { X, ChevronRight, ChevronLeft, CheckCircle2, Wallet, ChevronDown, SkipFo
 import { useStore } from '../context/StoreContext';
 import { useTheme } from '../context/ThemeContext';
 import { Trade, TradeStatus, TradingSession } from '../types';
+import CurrencySelector from './CurrencySelector';
+
+const CURRENCY_SYMBOLS = ['$', '£', '€', '¥', '₹', '₽', '₪', '₩', '₫', '฿', '₺', '₴', 'R', '₵', 'Sh'];
 
 interface TradeWizardProps {
   isOpen: boolean;
@@ -18,7 +21,8 @@ const AccountCreationInWizard: React.FC<{
   onSuccess: () => void;
 }> = ({ onClose, onSuccess }) => {
   const { addAccount } = useStore();
-  const [formData, setFormData] = useState({ name: '', startingBalance: '' });
+  const { theme } = useTheme();
+  const [formData, setFormData] = useState({ name: '', startingBalance: '', currencySymbol: '$' });
 
   const handleSubmit = () => {
     if (formData.name && formData.startingBalance) {
@@ -26,6 +30,7 @@ const AccountCreationInWizard: React.FC<{
         id: `acc_${Date.now()}`,
         name: formData.name,
         startingBalance: parseFloat(formData.startingBalance),
+        currencySymbol: formData.currencySymbol,
         createdAt: new Date().toISOString(),
         isMain: true,
         isHidden: false,
@@ -61,28 +66,37 @@ const AccountCreationInWizard: React.FC<{
             className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
             autoFocus
           />
-          <input
-            type="number"
-            value={formData.startingBalance}
-            onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
-            placeholder="Starting balance"
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
-          />
+          <div className="flex gap-2">
+            <div className="w-20">
+              <CurrencySelector
+                value={formData.currencySymbol}
+                onChange={(val) => setFormData({ ...formData, currencySymbol: val })}
+              />
+            </div>
+            <input
+              type="number"
+              value={formData.startingBalance}
+              onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
+              placeholder="Starting balance"
+              className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none outline-none"
+              style={{ height: '42px' }}
+            />
+          </div>
           <div className="flex gap-2 pt-2">
             <button
               onClick={handleSubmit}
               disabled={!formData.name || !formData.startingBalance}
               className="flex-1 py-3 disabled:opacity-50 disabled:cursor-not-allowed text-slate-900 rounded-xl font-bold transition-colors"
               style={{
-                backgroundColor: theme.primary,
+                backgroundColor: '#8b5cf6',
               }}
               onMouseEnter={(e) => {
                 if (!e.currentTarget.disabled) {
-                  e.currentTarget.style.backgroundColor = theme.primaryDark;
+                  e.currentTarget.style.backgroundColor = '#7c3aed';
                 }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = theme.primary;
+                e.currentTarget.style.backgroundColor = '#8b5cf6';
               }}
             >
               Create Account
@@ -104,7 +118,7 @@ const AccountCreationInWizard: React.FC<{
 type WizardStep = 'entry' | 'details';
 
 // Interactive question steps
-type DetailStep = 
+type DetailStep =
   | 'strategy'
   | 'planDiscipline'
   | 'session'
@@ -132,32 +146,32 @@ const COMMON_MISTAKES = [
 // Asset class detection and pip value calculation
 const getAssetInfo = (symbol: string): { type: string; pipValue: number; pipSize: number; description: string } => {
   const s = symbol.toUpperCase();
-  
+
   // Gold
   if (s === 'XAUUSD' || s === 'GOLD') {
     return { type: 'gold', pipValue: 100, pipSize: 1, description: '$100 per $1 move per lot' };
   }
-  
+
   // Silver
   if (s === 'XAGUSD' || s === 'SILVER') {
     return { type: 'silver', pipValue: 5000, pipSize: 0.01, description: '$50 per $0.01 move per lot' };
   }
-  
+
   // JPY pairs (pip = 0.01)
   if (s.includes('JPY')) {
     return { type: 'jpy_pair', pipValue: 6.5, pipSize: 0.01, description: '~$6.50 per pip per lot' };
   }
-  
+
   // Major USD pairs (pip = 0.0001)
   if (['EURUSD', 'GBPUSD', 'AUDUSD', 'NZDUSD'].includes(s)) {
     return { type: 'usd_major', pipValue: 10, pipSize: 0.0001, description: '$10 per pip per lot' };
   }
-  
+
   // USD quote pairs
   if (s.endsWith('USD') && s.length === 6) {
     return { type: 'xxx_usd', pipValue: 10, pipSize: 0.0001, description: '$10 per pip per lot' };
   }
-  
+
   // Indices
   if (['US30', 'DJ30', 'DOW'].some(idx => s.includes(idx))) {
     return { type: 'index', pipValue: 1, pipSize: 1, description: '$1 per point per lot' };
@@ -168,7 +182,7 @@ const getAssetInfo = (symbol: string): { type: string; pipValue: number; pipSize
   if (['SPX500', 'SP500', 'US500'].some(idx => s.includes(idx))) {
     return { type: 'index', pipValue: 1, pipSize: 1, description: '$1 per point per lot' };
   }
-  
+
   // Crypto
   if (['BTCUSD', 'BITCOIN'].some(c => s.includes(c))) {
     return { type: 'crypto', pipValue: 1, pipSize: 1, description: '$1 per $1 move per lot' };
@@ -176,12 +190,12 @@ const getAssetInfo = (symbol: string): { type: string; pipValue: number; pipSize
   if (['ETHUSD', 'ETHEREUM'].some(c => s.includes(c))) {
     return { type: 'crypto', pipValue: 1, pipSize: 1, description: '$1 per $1 move per lot' };
   }
-  
+
   // Oil
   if (['USOIL', 'WTIUSD', 'CRUDEOIL', 'CL'].some(o => s.includes(o))) {
     return { type: 'oil', pipValue: 10, pipSize: 0.01, description: '$10 per $0.01 move per lot' };
   }
-  
+
   // Default forex cross
   return { type: 'forex_cross', pipValue: 10, pipSize: 0.0001, description: '~$10 per pip per lot' };
 };
@@ -197,13 +211,13 @@ const calculatePnL = (
   if (!symbol || !direction || !entryPrice || !exitPrice || !lots) {
     return null;
   }
-  
+
   const assetInfo = getAssetInfo(symbol);
   const priceDiff = exitPrice - entryPrice;
   const directionMultiplier = direction === 'BUY' ? 1 : -1;
-  
+
   let pnl: number;
-  
+
   switch (assetInfo.type) {
     case 'gold':
       // Gold: $100 per $1 move per lot
@@ -233,7 +247,7 @@ const calculatePnL = (
       pnl = pips * lots * 10 * directionMultiplier;
       break;
   }
-  
+
   return Math.round(pnl * 100) / 100; // Round to 2 decimals
 };
 
@@ -247,12 +261,12 @@ const calculateRR = (
   if (!direction || !entryPrice || !stopLoss || !takeProfit) {
     return null;
   }
-  
+
   const risk = Math.abs(entryPrice - stopLoss);
   const reward = Math.abs(takeProfit - entryPrice);
-  
+
   if (risk === 0) return null;
-  
+
   return Math.round((reward / risk) * 100) / 100;
 };
 
@@ -260,36 +274,36 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
   const { addTrade, updateTrade, accounts, strategies, addStrategy } = useStore();
   const { theme } = useTheme();
   const navigate = useNavigate();
-  
+
   // Main wizard step
   const [wizardStep, setWizardStep] = useState<WizardStep>('entry');
   const [detailStep, setDetailStep] = useState<DetailStep>('strategy');
-  
+
   // Account selection
   const [showAccountDropdown, setShowAccountDropdown] = useState(false);
   const [showAddAccountPrompt, setShowAddAccountPrompt] = useState(false);
-  
+
   // Manual P&L override
   const [manualPnL, setManualPnL] = useState(false);
-  
+
   // Calendar popup state
   const [showCalendar, setShowCalendar] = useState(false);
-  
+
   // Collapsible fields state
   const [showAdvancedFields, setShowAdvancedFields] = useState(false);
-  
+
   // Create Trade Setup modal state
   const [showCreateStrategyModal, setShowCreateStrategyModal] = useState(false);
   const [newStrategyTitle, setNewStrategyTitle] = useState('');
   const [newStrategyItems, setNewStrategyItems] = useState<string[]>(['']);
-  
+
   const visibleAccounts = useMemo(() => accounts.filter(a => !a.isHidden), [accounts]);
-  
+
   const getDefaultAccountId = () => {
     if (visibleAccounts.length > 0) return visibleAccounts[0].id;
     return '';
   };
-  
+
   // Check if user has accounts when modal opens
   useEffect(() => {
     if (isOpen && visibleAccounts.length === 0) {
@@ -378,7 +392,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
         setManualPnL(true);
         const entryPrice = editingTrade.entryPrice.toString();
         const exitPrice = editingTrade.exitPrice.toString();
-        const stopLoss = editingTrade.riskAmount ? (editingTrade.side === 'LONG' 
+        const stopLoss = editingTrade.riskAmount ? (editingTrade.side === 'LONG'
           ? (editingTrade.entryPrice - editingTrade.riskAmount).toString()
           : (editingTrade.entryPrice + editingTrade.riskAmount).toString()
         ) : '';
@@ -386,7 +400,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
           ? (editingTrade.entryPrice + editingTrade.tpAmount).toString()
           : (editingTrade.entryPrice - editingTrade.tpAmount).toString()
         ) : '';
-        
+
         // Extract time from tradeTime if exists, otherwise use time field, otherwise use current time
         let tradeTimeStr = new Date().toTimeString().slice(0, 5);
         if (editingTrade.tradeTime) {
@@ -398,7 +412,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
         } else if (editingTrade.time) {
           tradeTimeStr = editingTrade.time;
         }
-        
+
         setEntryData({
           symbol: editingTrade.symbol,
           direction: editingTrade.side === 'LONG' ? 'BUY' : 'SELL',
@@ -413,7 +427,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
           tradeTime: tradeTimeStr,
           accountId: editingTrade.accountId || getDefaultAccountId()
         });
-        
+
         // Auto-expand advanced fields if any have values
         setShowAdvancedFields(!!(entryPrice || exitPrice || stopLoss || takeProfit));
         setDetailData({
@@ -455,7 +469,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
           customMistake: '',
           notes: ''
         });
-        
+
         // Reset advanced fields visibility for new trade
         setShowAdvancedFields(false);
       }
@@ -463,16 +477,16 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
   }, [isOpen, accounts, editingTrade]);
 
   if (!isOpen) return null;
-  
+
   // Show add account prompt if no accounts
   if (visibleAccounts.length === 0) {
     return (
-      <AccountCreationInWizard 
-        onClose={onClose} 
+      <AccountCreationInWizard
+        onClose={onClose}
         onSuccess={() => {
           // After account is created, the component will re-render and visibleAccounts will have items
           // The wizard will then show normally
-        }} 
+        }}
       />
     );
   }
@@ -493,14 +507,14 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
     if (!canProceedToDetails()) {
       return;
     }
-    
+
     const pnl = parseFloat(entryData.pnl) || 0;
     const lots = parseFloat(entryData.lots) || 0;
     // Commission is always negative (deducted) even if user enters positive number
-    const commission = entryData.commission 
-      ? Math.abs(parseFloat(entryData.commission)) * -1 
+    const commission = entryData.commission
+      ? Math.abs(parseFloat(entryData.commission)) * -1
       : undefined;
-    
+
     const tradeData: Trade = {
       id: editingTrade?.id || Date.now().toString(),
       symbol: entryData.symbol.toUpperCase(),
@@ -509,9 +523,9 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
       pnl: pnl,
       date: entryData.date,
       time: entryData.tradeTime || editingTrade?.time || new Date().toTimeString().slice(0, 5),
-      tradeTime: entryData.tradeTime && entryData.date 
+      tradeTime: entryData.tradeTime && entryData.date
         ? new Date(`${entryData.date}T${entryData.tradeTime}:00`).toISOString()
-        : editingTrade?.tradeTime || (entryData.tradeTime && entryData.date 
+        : editingTrade?.tradeTime || (entryData.tradeTime && entryData.date
           ? new Date(`${entryData.date}T${entryData.tradeTime}:00`).toISOString()
           : undefined),
       session: detailData.session,
@@ -535,7 +549,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
       riskAmount: parseFloat(entryData.stopLoss) ? Math.abs(parseFloat(entryData.entryPrice) - parseFloat(entryData.stopLoss)) : undefined,
       tpAmount: parseFloat(entryData.takeProfit) ? Math.abs(parseFloat(entryData.takeProfit) - parseFloat(entryData.entryPrice)) : undefined,
     };
-    
+
     if (editingTrade) {
       updateTrade(editingTrade.id, tradeData);
     } else {
@@ -590,7 +604,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
     };
 
     addStrategy(newStrategy);
-    
+
     // Automatically select the newly created strategy and advance
     setDetailData({ ...detailData, strategy: newStrategy.title });
     setShowCreateStrategyModal(false);
@@ -660,11 +674,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 setEntryData({ ...entryData, symbol: pair });
                 setManualPnL(false);
               }}
-              className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${
-                entryData.symbol === pair 
-                  ? 'text-slate-900 font-bold' 
-                  : 'bg-slate-800 text-slate-400 hover:text-white'
-              }`}
+              className={`px-2 py-0.5 text-[10px] font-mono rounded transition-colors ${entryData.symbol === pair
+                ? 'text-slate-900 font-bold'
+                : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
               style={entryData.symbol === pair ? {
                 backgroundColor: theme.primary
               } : {}}
@@ -740,11 +753,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               setEntryData({ ...entryData, direction: 'BUY' });
               setManualPnL(false);
             }}
-            className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
-              entryData.direction === 'BUY'
-                ? 'text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
+            className={`py-2.5 rounded-lg font-bold text-sm transition-all ${entryData.direction === 'BUY'
+              ? 'text-white'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
             style={entryData.direction === 'BUY' ? {
               backgroundColor: theme.primary
             } : {}}
@@ -756,11 +768,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               setEntryData({ ...entryData, direction: 'SELL' });
               setManualPnL(false);
             }}
-            className={`py-2.5 rounded-lg font-bold text-sm transition-all ${
-              entryData.direction === 'SELL'
-                ? 'text-white'
-                : 'bg-slate-800 text-slate-400 hover:text-white'
-            }`}
+            className={`py-2.5 rounded-lg font-bold text-sm transition-all ${entryData.direction === 'SELL'
+              ? 'text-white'
+              : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
             style={entryData.direction === 'SELL' ? {
               backgroundColor: theme.secondary || '#f43f5e'
             } : {}}
@@ -871,7 +882,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
         </div>
         <div>
           <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block flex items-center gap-1">
-            P&L ($) *
+            P&L ({selectedAccount?.currencySymbol || '$'}) *
             {calculatedPnL !== null && !manualPnL && (
               <span className="text-[9px] text-brand-400 font-normal">AUTO</span>
             )}
@@ -885,13 +896,12 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
               setManualPnL(true);
             }}
             placeholder="-510.92"
-            className={`w-full bg-slate-950 border rounded-lg px-3 py-2 font-mono text-sm focus:outline-none outline-none ${
-              entryData.pnl && !isNaN(parseFloat(entryData.pnl))
-                ? parseFloat(entryData.pnl) >= 0 
-                  ? 'border-emerald-500/50 text-emerald-400' 
-                  : 'border-rose-500/50 text-rose-400'
-                : 'border-slate-700 text-white'
-            }`}
+            className={`w-full bg-slate-950 border rounded-lg px-3 py-2 font-mono text-sm focus:outline-none outline-none ${entryData.pnl && !isNaN(parseFloat(entryData.pnl))
+              ? parseFloat(entryData.pnl) >= 0
+                ? 'border-emerald-500/50 text-emerald-400'
+                : 'border-rose-500/50 text-rose-400'
+              : 'border-slate-700 text-white'
+              }`}
           />
         </div>
       </div>
@@ -913,18 +923,17 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
       {/* P&L Calculation Info - Show when we have enough data OR show hint */}
       {entryData.entryPrice && entryData.exitPrice && entryData.lots ? (
         calculatedPnL !== null ? (
-          <div className={`flex items-center gap-2 p-2 rounded-lg border ${
-            calculatedPnL >= 0 
-              ? 'bg-emerald-500/10 border-emerald-500/20' 
-              : 'bg-rose-500/10 border-rose-500/20'
-          }`}>
+          <div className={`flex items-center gap-2 p-2 rounded-lg border ${calculatedPnL >= 0
+            ? 'bg-emerald-500/10 border-emerald-500/20'
+            : 'bg-rose-500/10 border-rose-500/20'
+            }`}>
             {calculatedPnL >= 0 ? (
               <TrendingUp size={14} className="text-emerald-400" />
             ) : (
               <TrendingDown size={14} className="text-rose-400" />
             )}
             <span className={`text-xs ${calculatedPnL >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              Calculated: <span className="font-bold">${calculatedPnL.toFixed(2)}</span>
+              Calculated: <span className="font-bold">{selectedAccount?.currencySymbol || '$'}{calculatedPnL.toFixed(2)}</span>
             </span>
             {manualPnL && (
               <button
@@ -996,11 +1005,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                         setDetailData({ ...detailData, strategy: s.title });
                         advanceDetailStep();
                       }}
-                      className={`w-full p-3 rounded-xl text-left transition-all ${
-                        detailData.strategy === s.title
-                          ? 'border-2 text-white'
-                          : 'bg-slate-800 border-2 border-transparent text-slate-300 hover:border-slate-600'
-                      }`}
+                      className={`w-full p-3 rounded-xl text-left transition-all ${detailData.strategy === s.title
+                        ? 'border-2 text-white'
+                        : 'bg-slate-800 border-2 border-transparent text-slate-300 hover:border-slate-600'
+                        }`}
                       style={detailData.strategy === s.title ? {
                         backgroundColor: theme.primary + '20',
                         borderColor: theme.primary,
@@ -1084,11 +1092,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   setDetailData({ ...detailData, planDiscipline: true });
                   advanceDetailStep();
                 }}
-                className={`p-6 rounded-xl font-bold transition-all ${
-                  detailData.planDiscipline === true
-                    ? 'bg-emerald-500 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                }`}
+                className={`p-6 rounded-xl font-bold transition-all ${detailData.planDiscipline === true
+                  ? 'bg-emerald-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
               >
                 ✓ Yes
               </button>
@@ -1097,11 +1104,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                   setDetailData({ ...detailData, planDiscipline: false });
                   advanceDetailStep();
                 }}
-                className={`p-6 rounded-xl font-bold transition-all ${
-                  detailData.planDiscipline === false
-                    ? 'bg-rose-500 text-white'
-                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                }`}
+                className={`p-6 rounded-xl font-bold transition-all ${detailData.planDiscipline === false
+                  ? 'bg-rose-500 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                  }`}
               >
                 ✗ No
               </button>
@@ -1122,11 +1128,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                     setDetailData({ ...detailData, session });
                     advanceDetailStep();
                   }}
-                  className={`p-3 rounded-xl font-medium text-xs transition-all ${
-                    detailData.session === session
-                      ? 'text-slate-900'
-                      : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                  }`}
+                  className={`p-3 rounded-xl font-medium text-xs transition-all ${detailData.session === session
+                    ? 'text-slate-900'
+                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+                    }`}
                   style={detailData.session === session ? {
                     backgroundColor: theme.primary
                   } : {}}
@@ -1148,11 +1153,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 <button
                   key={emotion}
                   onClick={() => toggleEmotion(emotion)}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                    detailData.emotions.includes(emotion)
-                      ? 'text-slate-900'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${detailData.emotions.includes(emotion)
+                    ? 'text-slate-900'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
                   style={detailData.emotions.includes(emotion) ? {
                     backgroundColor: theme.primary
                   } : {}}
@@ -1191,11 +1195,10 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 <button
                   key={mistake}
                   onClick={() => toggleMistake(mistake)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                    detailData.mistakes.includes(mistake)
-                      ? 'bg-rose-500 text-white'
-                      : 'bg-slate-800 text-slate-400 hover:text-white'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${detailData.mistakes.includes(mistake)
+                    ? 'bg-rose-500 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:text-white'
+                    }`}
                 >
                   {mistake}
                 </button>
@@ -1250,16 +1253,16 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b border-slate-800">
           <div className="flex items-center gap-3">
-          <h2 className="text-xl font-bold text-white">
-            {editingTrade ? 'Edit Trade' : (wizardStep === 'entry' ? 'New Trade' : 'Trade Details')}
-          </h2>
+            <h2 className="text-xl font-bold text-white">
+              {editingTrade ? 'Edit Trade' : (wizardStep === 'entry' ? 'New Trade' : 'Trade Details')}
+            </h2>
             {wizardStep === 'details' && (
               <span className="text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded">
                 {getDetailStepNumber()}/6
               </span>
             )}
           </div>
-          
+
           <div className="flex items-center gap-2">
             {/* Account Selector - Only on entry step */}
             {wizardStep === 'entry' && visibleAccounts.length > 0 && (
@@ -1283,9 +1286,8 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                             setEntryData({ ...entryData, accountId: account.id });
                             setShowAccountDropdown(false);
                           }}
-                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-700 transition-colors ${
-                            account.id === entryData.accountId ? 'text-brand-400' : 'text-slate-300'
-                          }`}
+                          className={`w-full text-left px-3 py-2 text-sm hover:bg-slate-700 transition-colors ${account.id === entryData.accountId ? 'text-brand-400' : 'text-slate-300'
+                            }`}
                         >
                           {account.name}
                         </button>
@@ -1295,7 +1297,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 )}
               </div>
             )}
-            
+
             <button onClick={onClose} className="text-slate-400 hover:text-white p-1">
               <X size={20} />
             </button>
@@ -1319,7 +1321,7 @@ const TradeWizard: React.FC<TradeWizardProps> = ({ isOpen, onClose, editingTrade
                 <SkipForward size={14} />
                 Skip remaining & Save Trade
               </button>
-              
+
               <button
                 onClick={handleDetailBack}
                 className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl font-medium transition-colors flex items-center justify-center gap-2"
@@ -1593,15 +1595,14 @@ const CalendarPicker: React.FC<{
                   onDateSelect(dayStr);
                 }
               }}
-              className={`aspect-square rounded-lg text-sm font-medium transition-all ${
-                !dayData.isCurrentMonth
-                  ? 'text-slate-700 cursor-not-allowed'
-                  : selected
+              className={`aspect-square rounded-lg text-sm font-medium transition-all ${!dayData.isCurrentMonth
+                ? 'text-slate-700 cursor-not-allowed'
+                : selected
                   ? 'bg-purple-500 text-white'
                   : todayDate
-                  ? 'bg-slate-800 text-purple-400 border-2 border-purple-500'
-                  : 'text-slate-300 hover:bg-slate-800'
-              }`}
+                    ? 'bg-slate-800 text-purple-400 border-2 border-purple-500'
+                    : 'text-slate-300 hover:bg-slate-800'
+                }`}
             >
               {dayData.date.getDate()}
             </button>

@@ -68,6 +68,7 @@ export interface Trade {
   // Risk:Reward (only set for winning trades)
   riskRewardRatio?: number; // e.g., 2 means 1:2 R:R
   archived?: boolean; // Whether the trade is archived
+  timestamp?: any; // Firestore server timestamp
 }
 
 export interface DashboardStats {
@@ -84,6 +85,7 @@ export interface TradingAccount {
   name: string;
   broker?: string;
   startingBalance: number;
+  currencySymbol?: string; // e.g., '$', '£', '€'
   commissionPerLot?: number; // Optional commission per lot
   isMain: boolean;
   isHidden: boolean;

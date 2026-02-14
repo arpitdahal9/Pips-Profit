@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Zap, ArrowRight, Lock, Delete, User, AlertTriangle } from 'lucide-react';
+import { Zap, ArrowRight, Lock, Delete, User, AlertTriangle, Check } from 'lucide-react';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
-  const [view, setView] = useState<'register_name' | 'register_pin' | 'login'>('register_name');
+  const [view, setView] = useState<'register_name' | 'register_pin' | 'set_lockout' | 'login'>('register_name');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
+  const [lockoutTime, setLockoutTime] = useState('15');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState('');
   const [storedUser, setStoredUser] = useState<{ name: string; pin: string } | null>(null);
@@ -70,15 +71,24 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
   useEffect(() => {
     if (view === 'register_pin' && pin.length === 6 && confirmPin.length === 6) {
       if (pin === confirmPin) {
-        const userData = { name, pin, createdAt: new Date().toISOString() };
-        localStorage.setItem('velox_user', JSON.stringify(userData));
-        onAuthenticated();
+        setView('set_lockout');
       } else {
         setError('PINs do not match');
         setConfirmPin('');
       }
     }
-  }, [confirmPin, pin, view, name, onAuthenticated]);
+  }, [confirmPin, pin, view]);
+
+  const handleCompleteRegistration = () => {
+    const userData = {
+      name,
+      pin,
+      lockoutTime,
+      createdAt: new Date().toISOString()
+    };
+    localStorage.setItem('velox_user', JSON.stringify(userData));
+    onAuthenticated();
+  };
 
   useEffect(() => {
     if (view === 'login' && pin.length === 6 && storedUser) {
@@ -246,6 +256,55 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
 
             {renderPinDots(pin.length < 6 ? pin : confirmPin)}
             {renderNumpad()}
+          </div>
+        )}
+
+        {/* Set Lockout View */}
+        {view === 'set_lockout' && (
+          <div className="w-full">
+            <div className="stat-card p-6 mb-4">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-[#8b5cf6]/10 flex items-center justify-center">
+                  <Lock size={20} className="text-[#8b5cf6]" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Security Settings</h2>
+                  <p className="text-xs text-slate-500">How long before the app locks?</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {[
+                  { value: '15', label: '15 Minutes (Default)' },
+                  { value: '30', label: '30 Minutes' },
+                  { value: '60', label: '1 Hour' },
+                  { value: 'never', label: 'Never Lock' }
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setLockoutTime(option.value)}
+                    className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-center justify-between ${lockoutTime === option.value
+                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-white'
+                        : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700'
+                      }`}
+                  >
+                    <span className="font-medium">{option.label}</span>
+                    {lockoutTime === option.value && <div className="w-4 h-4 rounded-full bg-[#8b5cf6] flex items-center justify-center"><Check size={10} className="text-white" /></div>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <button
+              onClick={handleCompleteRegistration}
+              className="w-full py-4 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition-all neon-glow"
+              style={{
+                background: 'linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%)',
+                color: 'white'
+              }}
+            >
+              Finish Setup <ArrowRight size={18} />
+            </button>
           </div>
         )}
 

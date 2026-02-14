@@ -15,10 +15,10 @@ import AuthScreen from './components/AuthScreen';
 // Capacitor Status Bar (only runs on native)
 const initStatusBar = async (color: string) => {
   // Check if Capacitor is available and we're on native platform
-  const isNative = typeof (window as any).Capacitor !== 'undefined' && 
-                   (window as any).Capacitor.isNativePlatform && 
-                   (window as any).Capacitor.isNativePlatform();
-  
+  const isNative = typeof (window as any).Capacitor !== 'undefined' &&
+    (window as any).Capacitor.isNativePlatform &&
+    (window as any).Capacitor.isNativePlatform();
+
   if (!isNative) {
     return; // Skip on web
   }
@@ -81,7 +81,7 @@ const AppContent = () => {
       </header>
 
       {/* Content Area */}
-      <main className="flex-1 min-h-0 overflow-hidden relative">
+      <div className="flex-1 min-h-0 overflow-hidden relative">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/trades" element={<TradeLog />} />
@@ -92,7 +92,7 @@ const AppContent = () => {
           {/* Redirects */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </main>
+      </div>
 
       {/* Bottom Navigation */}
       <BottomNav />
@@ -106,32 +106,49 @@ const App = () => {
 
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible') {
+      const userData = localStorage.getItem('velox_user');
+      if (!userData) return;
+
+      const user = JSON.parse(userData);
+      // Default to 15 minutes if not set
+      const lockoutMinutes = user.lockoutTime === 'never' ? -1 : parseInt(user.lockoutTime || '15');
+
+      if (document.visibilityState === 'hidden') {
+        localStorage.setItem('velox_last_active', Date.now().toString());
+      } else if (document.visibilityState === 'visible') {
         if (!hasShownRef.current) {
           hasShownRef.current = true;
           return;
         }
-        setIsUnlocked(false);
+
+        if (lockoutMinutes === -1) return; // Never lock
+
+        const lastActive = localStorage.getItem('velox_last_active');
+        if (lastActive) {
+          const elapsedMinutes = (Date.now() - parseInt(lastActive)) / (1000 * 60);
+          if (elapsedMinutes > lockoutMinutes) {
+            setIsUnlocked(false);
+          }
+        } else {
+          // If no last active time (first launch/cleared), lock for safety
+          setIsUnlocked(false);
+        }
       }
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, []);
 
-  if (!isUnlocked) {
-    return (
-      <ThemeProvider>
-        <AuthScreen onAuthenticated={() => setIsUnlocked(true)} />
-      </ThemeProvider>
-    );
-  }
-
   return (
     <ThemeProvider>
       <StoreProvider>
         <AuthModalProvider>
           <HashRouter>
-            <AppContent />
+            {!isUnlocked ? (
+              <AuthScreen onAuthenticated={() => setIsUnlocked(true)} />
+            ) : (
+              <AppContent />
+            )}
           </HashRouter>
         </AuthModalProvider>
       </StoreProvider>

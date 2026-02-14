@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AreaChart, Area, ResponsiveContainer, BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, BarChart3, Zap, Plus, ChevronRight, ChevronDown, Wallet, X, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, BarChart3, Zap, Plus, ChevronRight, ChevronDown, Wallet, X, Target, MessageSquare } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 import { useTheme } from '../context/ThemeContext';
 import { useAuthModal } from '../context/AuthModalContext';
@@ -9,7 +9,10 @@ import TradeWizard from './TradeWizard';
 import TradeTypeSelector from './TradeTypeSelector';
 import MultipleTradeWizard from './MultipleTradeWizard';
 import AccountSettingsModal from './AccountSettingsModal';
+import CurrencySelector from './CurrencySelector';
 import { TradingAccount } from '../types';
+
+const CURRENCY_SYMBOLS = ['$', '£', '€', '¥', '₹', '₽', '₪', '₩', '₫', '฿', '₺', '₴', 'R', '₵', 'Sh'];
 
 // Account Creation Form Component
 const AccountCreationForm: React.FC<{
@@ -19,7 +22,7 @@ const AccountCreationForm: React.FC<{
 }> = ({ onSuccess, onCancel, theme }) => {
   const { theme: themeContext } = useTheme();
   const { addAccount } = useStore();
-  const [formData, setFormData] = useState({ name: '', startingBalance: '' });
+  const [formData, setFormData] = useState({ name: '', startingBalance: '', currencySymbol: '$' });
 
   const handleSubmit = () => {
     if (formData.name && formData.startingBalance) {
@@ -27,6 +30,7 @@ const AccountCreationForm: React.FC<{
         id: `acc_${Date.now()}`,
         name: formData.name,
         startingBalance: parseFloat(formData.startingBalance),
+        currencySymbol: formData.currencySymbol,
         createdAt: new Date().toISOString(),
         isMain: false,
         isHidden: false,
@@ -45,13 +49,22 @@ const AccountCreationForm: React.FC<{
         className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
         autoFocus
       />
-      <input
-        type="number"
-        value={formData.startingBalance}
-        onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
-        placeholder="Starting balance"
-        className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
-      />
+      <div className="flex gap-2">
+        <div className="w-20">
+          <CurrencySelector
+            value={formData.currencySymbol}
+            onChange={(val) => setFormData({ ...formData, currencySymbol: val })}
+          />
+        </div>
+        <input
+          type="number"
+          value={formData.startingBalance}
+          onChange={e => setFormData({ ...formData, startingBalance: e.target.value })}
+          placeholder="Starting balance"
+          className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2.5 text-white text-sm focus:border-brand-500 outline-none"
+          style={{ height: '42px' }}
+        />
+      </div>
       <div className="flex gap-2 pt-2">
         <button
           onClick={handleSubmit}
@@ -96,7 +109,9 @@ const Dashboard = () => {
   const [showTradeTypeSelector, setShowTradeTypeSelector] = useState(false);
   const [isMultipleTradeMode, setIsMultipleTradeMode] = useState(false);
   const [showBackupPrompt, setShowBackupPrompt] = useState(false);
-
+  const [showChangelog, setShowChangelog] = useState(false);
+  const [doNotShowAgain, setDoNotShowAgain] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const visibleAccounts = accounts.filter(a => !a.isHidden);
 
   // Calculate total portfolio from all visible accounts
@@ -114,6 +129,11 @@ const Dashboard = () => {
   }, [visibleAccounts]);
 
   const percentChange = totalStartingBalance > 0 ? ((totalPortfolio - totalStartingBalance) / totalStartingBalance * 100) : 0;
+
+  // Use the currency symbol of the first visible account, or default to $
+  const currencySymbol = useMemo(() => {
+    return visibleAccounts[0]?.currencySymbol || '$';
+  }, [visibleAccounts]);
 
   const strategyPerformance = useMemo(() => {
     if (strategies.length === 0) {
@@ -187,6 +207,14 @@ const Dashboard = () => {
     }
   }, [cloudUser, trades.length]);
 
+  useEffect(() => {
+    const dontShow = localStorage.getItem('pips_profit_changelog_dont_show') === 'true';
+
+    if (!dontShow) {
+      setShowChangelog(true);
+    }
+  }, []);
+
 
   // Get trades from all visible accounts
   const accountTrades = useMemo(() => {
@@ -247,7 +275,7 @@ const Dashboard = () => {
   const emotionAnalytics = useMemo(() => {
     const winningEmotions: Record<string, number> = {};
     const losingEmotions: Record<string, number> = {};
-    
+
     accountTrades.forEach(trade => {
       if (trade.emotion) {
         const emotions = trade.emotion.split(',').map(e => e.trim()).filter(e => e);
@@ -348,8 +376,8 @@ const Dashboard = () => {
       className="flex-1 h-full overflow-y-auto pb-24"
       style={{ background: theme.bgGradient, backgroundSize: '400% 400%', animation: 'gradientShift 15s ease infinite' }}
     >
-      <TradeWizard 
-        isOpen={isModalOpen && !isMultipleTradeMode} 
+      <TradeWizard
+        isOpen={isModalOpen && !isMultipleTradeMode}
         onClose={() => {
           setIsModalOpen(false);
           setIsMultipleTradeMode(false);
@@ -376,12 +404,12 @@ const Dashboard = () => {
             <div className="flex items-center gap-3 mb-4">
               <div
                 className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: theme.primary + '20' }}
+                style={{ backgroundColor: '#8b5cf6' + '20' }}
               >
-                <Wallet size={24} style={{ color: theme.primary }} />
+                <Wallet size={24} style={{ color: '#8b5cf6' }} />
               </div>
               <div>
-                <h3 className={`text-lg font-bold ${textPrimary}`}>Add Account First</h3>
+                <h3 className={`text-lg font-bold text-white`}>Add Account First</h3>
                 <p className="text-sm text-slate-400">You need to add a trading account before logging trades</p>
               </div>
             </div>
@@ -391,7 +419,7 @@ const Dashboard = () => {
                 setIsModalOpen(true);
               }}
               onCancel={() => setShowAddAccountPrompt(false)}
-              theme={theme}
+              theme={{ ...theme, primary: '#8b5cf6', primaryDark: '#7c3aed' }}
             />
           </div>
         </div>
@@ -454,6 +482,113 @@ const Dashboard = () => {
           </div>
         )}
 
+        {/* Changelog Popup */}
+        {showChangelog && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-4">
+            <div
+              className="w-full max-w-sm rounded-[2rem] p-6 shadow-2xl relative overflow-hidden"
+              style={{ background: 'linear-gradient(180deg, #1e1b4b 0%, #020617 100%)', border: `1px solid ${theme.primary}40` }}
+            >
+              {/* Decorative light effect */}
+              <div
+                className="absolute -top-24 -right-24 w-48 h-48 rounded-full blur-[80px] opacity-20"
+                style={{ backgroundColor: theme.primary }}
+              />
+
+              <div className="flex flex-col items-center text-center">
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center mb-4 rotate-3"
+                  style={{ backgroundColor: `${theme.primary}20`, border: `1px solid ${theme.primary}40` }}
+                >
+                  <Zap size={32} style={{ color: theme.primary }} />
+                </div>
+
+                <h2 className="text-2xl font-black text-white mb-2 tracking-tight">What's New!</h2>
+
+                <div className="space-y-4 w-full mb-6">
+                  <div className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800">
+                    <h3 className="text-sm font-bold text-purple-400 mb-1 flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+                      Better Screenshot Handling
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed text-left">
+                      Annotate screenshots with Trend, Strategy, and custom tags. Automatic compression prevents memory crashes.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900/40 rounded-2xl p-4 border border-slate-800">
+                    <h3 className="text-sm font-bold text-indigo-400 mb-1 flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                      Security Lockout
+                    </h3>
+                    <p className="text-xs text-slate-400 leading-relaxed text-left">
+                      Added a 15-minute grace period by default. You can now customize your lockout duration in the Accounts section.
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-950/80 rounded-2xl p-4 border border-slate-800/50">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3 text-center">Contributors</p>
+                    <div className="flex flex-nowrap overflow-x-auto gap-2 pb-1 px-1 custom-hide-scrollbar">
+                      {['Jamaal', 'Coffee FX', 'Serhii Smoliakov', 'Vhutali Ravhuhali', 'Ray Julian', 'Mugesh K'].map(name => (
+                        <span
+                          key={name}
+                          className="flex-shrink-0 px-3 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-[10px] text-slate-300 font-bold shadow-sm"
+                        >
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Do not show again checkbox */}
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="checkbox"
+                    id="dont_show"
+                    checked={doNotShowAgain}
+                    onChange={(e) => setDoNotShowAgain(e.target.checked)}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-purple-500 focus:ring-0 focus:ring-offset-0"
+                  />
+                  <label htmlFor="dont_show" className="text-xs text-slate-500 font-medium">Don't show this update again</label>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowChangelog(false);
+                    if (doNotShowAgain) {
+                      localStorage.setItem('pips_profit_changelog_dont_show', 'true');
+                    }
+                  }}
+                  className="w-full py-4 rounded-2xl font-black text-sm uppercase tracking-widest text-white transition-all active:scale-95 shadow-lg mb-3"
+                  style={{
+                    background: `linear-gradient(135deg, ${theme.primary}, ${theme.primaryDark})`,
+                    boxShadow: `0 8px 20px ${theme.primary}40`
+                  }}
+                >
+                  Got it!
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowChangelog(false);
+                    navigate('/settings?requestFeature=true');
+                  }}
+                  className="w-full py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-white transition-all active:scale-95 shadow-lg flex items-center justify-center gap-2"
+                  style={{
+                    background: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
+                    boxShadow: '0 8px 20px rgba(139, 92, 246, 0.4)',
+                    border: '1px solid rgba(255,255,255,0.1)'
+                  }}
+                >
+                  <MessageSquare size={14} />
+                  Request a feature
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Portfolio Value Card */}
         <div
           className="p-5 rounded-2xl mb-4"
@@ -461,7 +596,7 @@ const Dashboard = () => {
         >
           <p className="text-xs text-slate-500 uppercase tracking-wider mb-1">Portfolio Value</p>
           <p className={`text-3xl font-bold ${textPrimary} font-mono mb-1`}>
-            ${totalPortfolio.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            {currencySymbol}{totalPortfolio.toLocaleString('en-US', { minimumFractionDigits: 2 })}
           </p>
           <div className="flex items-center gap-2 mb-4">
             {percentChange >= 0 ? (
@@ -594,25 +729,25 @@ const Dashboard = () => {
             <div className="p-3 rounded-xl bg-slate-800/50">
               <p className="text-[10px] text-slate-500 uppercase mb-1">Best Trade</p>
               <p className="text-lg font-bold text-emerald-400 font-mono">
-                +${stats.bestTrade.toFixed(0)}
+                +{currencySymbol}{stats.bestTrade.toFixed(0)}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-slate-800/50">
               <p className="text-[10px] text-slate-500 uppercase mb-1">Worst Trade</p>
               <p className="text-lg font-bold text-rose-400 font-mono">
-                ${stats.worstTrade.toFixed(0)}
+                {stats.worstTrade < 0 ? '-' : ''}{currencySymbol}{Math.abs(stats.worstTrade).toFixed(0)}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-slate-800/50">
               <p className="text-[10px] text-slate-500 uppercase mb-1">Avg Win</p>
               <p className="text-lg font-bold text-emerald-400 font-mono">
-                +${stats.avgWin.toFixed(0)}
+                +{currencySymbol}{stats.avgWin.toFixed(0)}
               </p>
             </div>
             <div className="p-3 rounded-xl bg-slate-800/50">
               <p className="text-[10px] text-slate-500 uppercase mb-1">Avg Loss</p>
               <p className="text-lg font-bold text-rose-400 font-mono">
-                -${stats.avgLoss.toFixed(0)}
+                -{currencySymbol}{stats.avgLoss.toFixed(0)}
               </p>
             </div>
           </div>
@@ -674,38 +809,38 @@ const Dashboard = () => {
               ) : (
                 <p className="text-sm text-slate-500 text-center py-4">No strategy performance data yet</p>
               )}
-            <div className="space-y-3">
-              {strategies.slice(0, 3).map(strategy => {
-                const strategyTrades = trades.filter(t => 
-                  t.strategy === strategy.title || t.strategyId === strategy.id
-                );
-                const strategyWins = strategyTrades.filter(t => t.status === 'WIN').length;
-                const strategyWinRate = strategyTrades.length > 0 
-                  ? (strategyWins / strategyTrades.length) * 100 
-                  : 0;
+              <div className="space-y-3">
+                {strategies.slice(0, 3).map(strategy => {
+                  const strategyTrades = trades.filter(t =>
+                    t.strategy === strategy.title || t.strategyId === strategy.id
+                  );
+                  const strategyWins = strategyTrades.filter(t => t.status === 'WIN').length;
+                  const strategyWinRate = strategyTrades.length > 0
+                    ? (strategyWins / strategyTrades.length) * 100
+                    : 0;
 
-                return (
-                  <div key={strategy.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50">
-                    <div className="flex-1">
-                      <p className="text-sm font-bold text-white">{strategy.title}</p>
-                      <div className="flex items-center gap-4 mt-1">
-                        <span className="text-xs text-slate-400">
-                          {strategyTrades.length} {strategyTrades.length === 1 ? 'trade' : 'trades'}
-                        </span>
-                        <span className={`text-xs font-medium ${strategyWinRate >= 50 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                          {strategyWinRate.toFixed(0)}% Win Rate
-                        </span>
+                  return (
+                    <div key={strategy.id} className="flex items-center justify-between p-3 rounded-xl bg-slate-800/50">
+                      <div className="flex-1">
+                        <p className="text-sm font-bold text-white">{strategy.title}</p>
+                        <div className="flex items-center gap-4 mt-1">
+                          <span className="text-xs text-slate-400">
+                            {strategyTrades.length} {strategyTrades.length === 1 ? 'trade' : 'trades'}
+                          </span>
+                          <span className={`text-xs font-medium ${strategyWinRate >= 50 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            {strategyWinRate.toFixed(0)}% Win Rate
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
-              {strategies.length > 3 && (
-                <p className="text-xs text-slate-500 text-center py-2">
-                  +{strategies.length - 3} more {strategies.length - 3 === 1 ? 'strategy' : 'strategies'}
-                </p>
-              )}
-            </div>
+                  );
+                })}
+                {strategies.length > 3 && (
+                  <p className="text-xs text-slate-500 text-center py-2">
+                    +{strategies.length - 3} more {strategies.length - 3 === 1 ? 'strategy' : 'strategies'}
+                  </p>
+                )}
+              </div>
             </>
           )}
         </div>
@@ -785,7 +920,7 @@ const Dashboard = () => {
             <Plus size={20} strokeWidth={2.5} />
             New Trade
           </button>
-          
+
           <TradeTypeSelector
             isOpen={showTradeTypeSelector}
             onClose={() => setShowTradeTypeSelector(false)}

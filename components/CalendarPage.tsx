@@ -19,12 +19,22 @@ const getTradesForDay = (trades: Trade[], date: Date): Trade[] => {
 };
 
 const CalendarPage: React.FC = () => {
-  const { trades } = useStore();
+  const { trades, accounts } = useStore();
   const { theme, isLightTheme } = useTheme();
   const textPrimary = isLightTheme ? 'text-slate-800' : 'text-white';
   const textSecondary = isLightTheme ? 'text-slate-600' : 'text-slate-400';
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+
+  const mainCurrencySymbol = useMemo(() => {
+    const mainAccount = accounts.find(a => !a.isHidden);
+    return mainAccount?.currencySymbol || '$';
+  }, [accounts]);
+
+  const getCurrencySymbol = (accountId?: string) => {
+    const account = accounts.find(a => a.id === accountId);
+    return account?.currencySymbol || '$';
+  };
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -236,7 +246,7 @@ const CalendarPage: React.FC = () => {
               <span className="text-[10px] text-slate-500 uppercase">Monthly P&L</span>
             </div>
             <p className={`text-xl font-bold font-mono ${monthlyStats.totalPnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-              {monthlyStats.totalPnl >= 0 ? '+' : ''}${monthlyStats.totalPnl.toFixed(2)}
+              {monthlyStats.totalPnl >= 0 ? '+' : '-'}{mainCurrencySymbol}{Math.abs(monthlyStats.totalPnl).toFixed(2)}
             </p>
           </div>
 
@@ -331,10 +341,10 @@ const CalendarPage: React.FC = () => {
                     {dayData.date.getDate()}
                   </span>
                   {hasTrades && dayData.isCurrentMonth && dayPnl !== 0 && (
-                    <span 
+                    <span
                       className={`text-[9px] font-bold mt-0.5 ${dayPnl > 0 ? 'text-emerald-400' : 'text-rose-400'}`}
                     >
-                      {dayPnl > 0 ? '+' : ''}{dayPnl.toFixed(0)}
+                      {dayPnl > 0 ? '+' : '-'}{mainCurrencySymbol}{Math.abs(dayPnl).toFixed(0)}
                     </span>
                   )}
                   {hasTrades && dayData.isCurrentMonth && dayPnl === 0 && (
@@ -382,7 +392,7 @@ const CalendarPage: React.FC = () => {
                     </span>
                   </div>
                   <span className={`font-mono font-bold text-sm ${trade.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {trade.pnl >= 0 ? '+' : ''}${trade.pnl.toFixed(2)}
+                    {trade.pnl >= 0 ? '+' : '-'}{getCurrencySymbol(trade.accountId)}{Math.abs(trade.pnl).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -410,7 +420,7 @@ const CalendarPage: React.FC = () => {
                     </span>
                   </div>
                   <span className={`font-mono text-xs font-bold ${week.pnl >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {week.pnl >= 0 ? '+' : ''}${week.pnl.toFixed(0)}
+                    {week.pnl >= 0 ? '+' : '-'}{mainCurrencySymbol}{Math.abs(week.pnl).toFixed(0)}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -450,7 +460,7 @@ const CalendarPage: React.FC = () => {
                     {monthlyStats.tradingDays === 1 ? 'Only Trading Day' : 'Best Day'}
                   </span>
                 </div>
-                <p className="text-lg font-bold text-emerald-400 font-mono">+${monthlyStats.bestDay.pnl.toFixed(0)}</p>
+                <p className="text-lg font-bold text-emerald-400 font-mono">+{mainCurrencySymbol}{monthlyStats.bestDay.pnl.toFixed(0)}</p>
                 <p className="text-[10px] text-slate-500 mt-1">
                   {new Date(monthlyStats.bestDay.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>
@@ -462,7 +472,7 @@ const CalendarPage: React.FC = () => {
                   <TrendingDown size={14} className="text-rose-400" />
                   <span className="text-[10px] text-rose-400 uppercase font-bold">Worst Day</span>
                 </div>
-                <p className="text-lg font-bold text-rose-400 font-mono">${monthlyStats.worstDay.pnl.toFixed(0)}</p>
+                <p className="text-lg font-bold text-rose-400 font-mono">-{mainCurrencySymbol}{Math.abs(monthlyStats.worstDay.pnl).toFixed(0)}</p>
                 <p className="text-[10px] text-slate-500 mt-1">
                   {new Date(monthlyStats.worstDay.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </p>

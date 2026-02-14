@@ -193,28 +193,10 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     const unsubscribe = onAuthStateChange((authUser) => {
       console.log('Auth state changed', authUser?.uid);
       if (authUser) {
-        // Save local data before switching to cloud
-        const localTrades = trades.length > 0 ? trades : loadTrades();
-        const localAccounts = accounts.length > 0 ? accounts : loadAccounts();
-        const localStrategies = strategies.length > 0 ? strategies : loadStrategies();
-        const localTags = tags.length > 0 ? tags : loadTags();
-        
-        // Store local data temporarily for migration
-        if (localTrades.length > 0 || localAccounts.length > 0 || localStrategies.length > 0 || localTags.length > 0) {
-          localStorage.setItem('velox_pending_migration', JSON.stringify({
-            trades: localTrades,
-            accounts: localAccounts,
-            strategies: localStrategies,
-            tags: localTags,
-            timestamp: Date.now()
-          }));
-        }
-        
+        console.log('User signed in:', authUser.uid);
         setCloudUser(authUser);
         setCloudReady(false);
         setSyncStatus(navigator.onLine ? 'syncing' : 'offline');
-        // Don't clear immediately - wait for cloud data to load first
-        // The cloud subscription will handle setting the data
       } else {
         setCloudUser(null);
         setCloudReady(false);
@@ -224,7 +206,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       }
     });
     return unsubscribe;
-  }, [resetToLocalState, trades, accounts, strategies, tags]);
+  }, [resetToLocalState]);
 
   useEffect(() => {
     if (!cloudUser) {
@@ -245,49 +227,29 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     handleNetworkChange();
 
     const unsubscribe = subscribeToTrades(cloudUser.uid, ({ trades: remoteTrades, hasPendingWrites, fromCache }) => {
-      // CRITICAL FIX: If cloud is empty and we have local data, upload it first
-      const pendingMigration = localStorage.getItem('velox_pending_migration');
-      if (pendingMigration && remoteTrades.length === 0 && !fromCache) {
-        try {
-          const pending = JSON.parse(pendingMigration);
-          if (pending.trades && pending.trades.length > 0) {
-            // Upload local data to cloud
-            uploadLocalTrades(cloudUser.uid, pending.trades).catch(err => 
-              console.error('Failed to upload local trades', err)
-            );
-            if (pending.accounts && pending.accounts.length > 0) {
-              uploadLocalAccounts(cloudUser.uid, pending.accounts).catch(err => 
-                console.error('Failed to upload local accounts', err)
-              );
-            }
-            if (pending.strategies && pending.strategies.length > 0) {
-              uploadLocalStrategies(cloudUser.uid, pending.strategies).catch(err => 
-                console.error('Failed to upload local strategies', err)
-              );
-            }
-            if (pending.tags && pending.tags.length > 0) {
-              uploadLocalTags(cloudUser.uid, pending.tags).catch(err => 
-                console.error('Failed to upload local tags', err)
-              );
-            }
-            // Clear migration flag after attempting upload
-            localStorage.removeItem('velox_pending_migration');
-          }
-        } catch (e) {
-          console.error('Failed to process pending migration', e);
-        }
-      }
-      
-      // Set cloud data (will be empty initially, then populated after upload)
-      setTrades(remoteTrades as Trade[]);
+      console.log(`Trades update: ${remoteTrades.length} trades, fromCache: ${fromCache}, hasPendingWrites: ${hasPendingWrites}`);
+
+      // 1. Sort trades on frontend by timestamp/date since we removed server-side orderBy to prevent index errors
+      const sortedTrades = [...(remoteTrades as Trade[])].sort((a, b) => {
+        const timeA = a.timestamp ? (a.timestamp.seconds || a.timestamp) : new Date(`${a.date}T${a.time || '00:00'}`).getTime();
+        const timeB = b.timestamp ? (b.timestamp.seconds || b.timestamp) : new Date(`${b.date}T${b.time || '00:00'}`).getTime();
+        return timeB - timeA;
+      });
+
+      setTrades(sortedTrades);
       setCloudReady(true);
+
       if (!navigator.onLine) {
         setSyncStatus('offline');
-      } else if (hasPendingWrites || fromCache) {
+      } else if (hasPendingWrites) {
         setSyncStatus('syncing');
       } else {
         setSyncStatus('synced');
       }
+    }, (error) => {
+      console.error('Trades subscription error:', error);
+      setSyncStatus('offline');
+      setCloudReady(true); // Allow app to continue with local data if cloud fails
     });
 
     return () => {
@@ -297,112 +259,91 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     };
   }, [cloudUser]);
 
+  // Central Migration & Initialization Logic
   useEffect(() => {
-    if (!cloudUser) return;
-    const migrationKey = `velox_cloud_migrated_${cloudUser.uid}`;
-    if (localStorage.getItem(migrationKey)) return;
-
-    let localTrades: Trade[] = [];
-    let localAccounts: TradingAccount[] = [];
-    let localStrategies: Strategy[] = [];
-    let localTags: Tag[] = [];
-    let localSettings: AppSettings | null = null;
-    let localProfile: { name?: string; avatar?: string; avatarUrl?: string } | null = null;
-    try {
-      const stored = localStorage.getItem('velox_trades');
-      localTrades = stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to read local trades for migration', error);
-      localTrades = [];
-    }
-    try {
-      const stored = localStorage.getItem('velox_accounts');
-      localAccounts = stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to read local accounts for migration', error);
-      localAccounts = [];
-    }
-    try {
-      const stored = localStorage.getItem('velox_strategies');
-      localStrategies = stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to read local strategies for migration', error);
-      localStrategies = [];
-    }
-    try {
-      const stored = localStorage.getItem('velox_tags');
-      localTags = stored ? JSON.parse(stored) : [];
-    } catch (error) {
-      console.error('Failed to read local tags for migration', error);
-      localTags = [];
-    }
-    try {
-      const stored = localStorage.getItem('velox_settings');
-      localSettings = stored ? JSON.parse(stored) : null;
-    } catch (error) {
-      console.error('Failed to read local settings for migration', error);
-      localSettings = null;
-    }
-    try {
-      const stored = localStorage.getItem('velox_user');
-      localProfile = stored ? JSON.parse(stored) : null;
-    } catch (error) {
-      console.error('Failed to read local profile for migration', error);
-      localProfile = null;
-    }
-
-    if (
-      localTrades.length === 0 &&
-      localAccounts.length === 0 &&
-      localStrategies.length === 0 &&
-      localTags.length === 0 &&
-      !localSettings &&
-      !localProfile
-    ) {
-      localStorage.setItem(migrationKey, '1');
+    if (!cloudUser) {
+      setCloudReady(false);
       return;
     }
 
-    let cancelled = false;
-    const runMigration = async () => {
+    const migrationKey = `velox_cloud_migrated_${cloudUser.uid}`;
+
+    const runInitialization = async () => {
+      console.log('Running initialization for user:', cloudUser.uid);
+
+      // If already migrated this user, we just wait for subscriptions to populate state
+      if (localStorage.getItem(migrationKey)) {
+        console.log('User already migrated. Waiting for cloud data...');
+        // We set cloudReady to true once we have some data or after a timeout
+        // But better is to wait for the FIRST success of subscribeToTrades
+        return;
+      }
+
+      // 1. Gather local data
+      let localTrades = loadTrades();
+      let localAccounts = loadAccounts();
+      let localStrategies = loadStrategies();
+      let localTags = loadTags();
+
+      // 2. IMPORTANT: Don't migrate mock data (initial demo data)
+      // Check if this is real user data or just the mock stuff
+      const isMockData = localTrades.length === MOCK_TRADES.length &&
+        localTrades.every((t, i) => t.id === MOCK_TRADES[i].id);
+
+      if (isMockData) {
+        console.log('Local data is mock data. Skipping migration.');
+        localStorage.setItem(migrationKey, '1');
+        setCloudReady(true);
+        return;
+      }
+
+      // 3. Perform Migration
       try {
+        console.log('Migrating local data to cloud...', {
+          trades: localTrades.length,
+          accounts: localAccounts.length
+        });
+
         setIsMigrating(true);
         setSyncStatus('syncing');
-        await uploadLocalTrades(cloudUser.uid, localTrades);
-        await uploadLocalAccounts(cloudUser.uid, localAccounts);
-        await uploadLocalStrategies(cloudUser.uid, localStrategies);
-        await uploadLocalTags(cloudUser.uid, localTags);
+
+        // Parallel upload
+        await Promise.all([
+          uploadLocalTrades(cloudUser.uid, localTrades),
+          uploadLocalAccounts(cloudUser.uid, localAccounts),
+          uploadLocalStrategies(cloudUser.uid, localStrategies),
+          uploadLocalTags(cloudUser.uid, localTags)
+        ]);
+
+        // Settings and Profile migration
+        const localSettings = localStorage.getItem('velox_settings');
         if (localSettings) {
-          await saveSettings(cloudUser.uid, localSettings);
+          await saveSettings(cloudUser.uid, JSON.parse(localSettings));
         }
+
+        const localProfile = localStorage.getItem('velox_user');
         if (localProfile) {
+          const profile = JSON.parse(localProfile);
           await saveProfile(cloudUser.uid, {
-            name: localProfile.name,
-            avatar: localProfile.avatar,
-            avatarUrl: localProfile.avatarUrl
+            name: profile.name,
+            avatar: profile.avatar,
+            avatarUrl: profile.avatarUrl
           });
         }
-        if (!cancelled) {
-          localStorage.setItem(migrationKey, '1');
-        }
+
+        console.log('Migration successful!');
+        localStorage.setItem(migrationKey, '1');
+        setSyncToast('Cloud migration complete!');
+        setTimeout(() => setSyncToast(null), 3000);
       } catch (error) {
-        console.error('Trade migration failed', error);
+        console.error('Migration failed:', error);
       } finally {
-        if (!cancelled) {
-          setIsMigrating(false);
-          if (navigator.onLine) {
-            setSyncStatus('synced');
-            setSyncToast('Sync complete');
-            setTimeout(() => setSyncToast(null), 3000);
-          }
-        }
+        setIsMigrating(false);
+        setCloudReady(true); // Now we can safely switch to cloud mode
       }
     };
 
-    runMigration();
-    return () => {
-      cancelled = true;
-    };
+    runInitialization();
   }, [cloudUser]);
 
   const forceSyncNow = async () => {
@@ -417,27 +358,27 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     try {
       const stored = localStorage.getItem('velox_trades');
       localTrades = stored ? JSON.parse(stored) : [];
-    } catch {}
+    } catch { }
     try {
       const stored = localStorage.getItem('velox_accounts');
       localAccounts = stored ? JSON.parse(stored) : [];
-    } catch {}
+    } catch { }
     try {
       const stored = localStorage.getItem('velox_strategies');
       localStrategies = stored ? JSON.parse(stored) : [];
-    } catch {}
+    } catch { }
     try {
       const stored = localStorage.getItem('velox_tags');
       localTags = stored ? JSON.parse(stored) : [];
-    } catch {}
+    } catch { }
     try {
       const stored = localStorage.getItem('velox_settings');
       localSettings = stored ? JSON.parse(stored) : null;
-    } catch {}
+    } catch { }
     try {
       const stored = localStorage.getItem('velox_user');
       localProfile = stored ? JSON.parse(stored) : null;
-    } catch {}
+    } catch { }
 
     setSyncStatus('syncing');
     await uploadLocalTrades(cloudUser.uid, localTrades);
@@ -465,7 +406,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     if (!cloudUser) return;
     const unsubscribe = subscribeToAccounts(cloudUser.uid, (remoteAccounts) => {
       setAccounts(remoteAccounts as TradingAccount[]);
-    });
+    }, (error) => console.error('Accounts subscription error:', error));
     return unsubscribe;
   }, [cloudUser]);
 
@@ -473,7 +414,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     if (!cloudUser) return;
     const unsubscribe = subscribeToStrategies(cloudUser.uid, (remoteStrategies) => {
       setStrategies(remoteStrategies as Strategy[]);
-    });
+    }, (error) => console.error('Strategies subscription error:', error));
     return unsubscribe;
   }, [cloudUser]);
 
@@ -481,7 +422,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     if (!cloudUser) return;
     const unsubscribe = subscribeToTags(cloudUser.uid, (remoteTags) => {
       setTags(remoteTags as Tag[]);
-    });
+    }, (error) => console.error('Tags subscription error:', error));
     return unsubscribe;
   }, [cloudUser]);
 
@@ -491,17 +432,28 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       if (remoteSettings) {
         setSettings(prev => ({ ...prev, ...remoteSettings }));
       }
-    });
+    }, (error) => console.error('Settings subscription error:', error));
     return unsubscribe;
   }, [cloudUser]);
 
   useEffect(() => {
     if (!cloudUser) return;
+    console.log('Subscribing to profile for:', cloudUser.uid);
     const unsubscribe = subscribeToProfile(cloudUser.uid, (remoteProfile) => {
       if (remoteProfile) {
-        setUser(prev => prev ? { ...prev, ...remoteProfile } : prev);
+        setUser(prev => {
+          // Keep local PIN as source of truth for the device
+          const localPin = prev?.pin || '';
+          const updated = prev
+            ? { ...prev, ...remoteProfile, pin: localPin }
+            : { name: remoteProfile.name || 'Trader', pin: '', ...remoteProfile } as UserProfile;
+
+          console.log('Profile updated from cloud:', updated.name);
+          localStorage.setItem('velox_user', JSON.stringify(updated));
+          return updated;
+        });
       }
-    });
+    }, (error) => console.error('Profile subscription error:', error));
     return unsubscribe;
   }, [cloudUser]);
 
@@ -545,8 +497,7 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
 
   const updateUser = (updates: Partial<UserProfile>) => {
     setUser(prev => {
-      if (!prev) return prev;
-      const updated = { ...prev, ...updates };
+      const updated = prev ? { ...prev, ...updates } : { name: 'Trader', pin: '', ...updates } as UserProfile;
       localStorage.setItem('velox_user', JSON.stringify(updated));
       if (cloudUser) {
         saveProfile(cloudUser.uid, {
@@ -602,9 +553,9 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     const fileName = `day-trading-journal-backup-${new Date().toISOString().split('T')[0]}.json`;
 
     // Check if running on native platform (Capacitor)
-    const isNative = typeof (window as any).Capacitor !== 'undefined' && 
-                     (window as any).Capacitor.isNativePlatform && 
-                     (window as any).Capacitor.isNativePlatform();
+    const isNative = typeof (window as any).Capacitor !== 'undefined' &&
+      (window as any).Capacitor.isNativePlatform &&
+      (window as any).Capacitor.isNativePlatform();
 
     if (isNative) {
       try {
@@ -692,9 +643,9 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
             setUser(prev => prev ? { ...prev, name: data.user!.name, avatar: data.user!.avatar } : prev);
           }
 
-          resolve({ 
-            success: true, 
-            message: `Imported ${data.trades.length} trades, ${data.accounts?.length || 0} accounts` 
+          resolve({
+            success: true,
+            message: `Imported ${data.trades.length} trades, ${data.accounts?.length || 0} accounts`
           });
         } catch (err) {
           resolve({ success: false, message: 'Failed to parse backup file' });
@@ -767,19 +718,19 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
   const getAccountBalance = (accountId: string): number => {
     const account = accounts.find(a => a.id === accountId);
     if (!account) return 0;
-    
-    const accountTrades = trades.filter(t => 
-      t.accountId === accountId && 
+
+    const accountTrades = trades.filter(t =>
+      t.accountId === accountId &&
       t.includeInAccount !== false
     );
-    
+
     // Include commission in balance calculation (commission is always negative)
     const totalPnl = accountTrades.reduce((sum, t) => sum + t.pnl + (t.commission || 0), 0);
     return account.startingBalance + totalPnl;
   };
 
   return (
-    <StoreContext.Provider value={{ 
+    <StoreContext.Provider value={{
       user,
       updateUser,
       cloudUser,
@@ -787,13 +738,13 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       isMigrating,
       forceSyncNow,
       syncToast,
-      trades, 
-      strategies, 
+      trades,
+      strategies,
       tags,
       accounts,
       settings,
       updateSettings,
-      deleteTrade, 
+      deleteTrade,
       addTrade,
       updateTrade,
       addStrategy,

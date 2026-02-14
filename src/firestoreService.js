@@ -55,8 +55,8 @@ export const deleteTrade = async (userId, tradeId) => {
   await deleteDoc(tradeRef);
 };
 
-export const subscribeToTrades = (userId, callback) => {
-  const tradesQuery = query(tradesCollection(userId), orderBy("timestamp", "desc"));
+export const subscribeToTrades = (userId, callback, onError) => {
+  const tradesQuery = query(tradesCollection(userId));
   return onSnapshot(tradesQuery, { includeMetadataChanges: true }, (snapshot) => {
     const trades = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
@@ -67,7 +67,7 @@ export const subscribeToTrades = (userId, callback) => {
       hasPendingWrites: snapshot.metadata.hasPendingWrites,
       fromCache: snapshot.metadata.fromCache
     });
-  });
+  }, onError);
 };
 
 export const uploadLocalTrades = async (userId, localTrades = []) => {
@@ -110,14 +110,14 @@ export const deleteAccount = async (userId, accountId) => {
   await deleteDoc(accountRef);
 };
 
-export const subscribeToAccounts = (userId, callback) => {
+export const subscribeToAccounts = (userId, callback, onError) => {
   return onSnapshot(accountsCollection(userId), (snapshot) => {
     const accounts = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
     callback(accounts);
-  });
+  }, onError);
 };
 
 export const uploadLocalAccounts = async (userId, localAccounts = []) => {
@@ -157,14 +157,14 @@ export const deleteStrategy = async (userId, strategyId) => {
   await deleteDoc(strategyRef);
 };
 
-export const subscribeToStrategies = (userId, callback) => {
+export const subscribeToStrategies = (userId, callback, onError) => {
   return onSnapshot(strategiesCollection(userId), (snapshot) => {
     const strategies = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
     callback(strategies);
-  });
+  }, onError);
 };
 
 export const uploadLocalStrategies = async (userId, localStrategies = []) => {
@@ -199,14 +199,14 @@ export const deleteTag = async (userId, tagId) => {
   await deleteDoc(tagRef);
 };
 
-export const subscribeToTags = (userId, callback) => {
+export const subscribeToTags = (userId, callback, onError) => {
   return onSnapshot(tagsCollection(userId), (snapshot) => {
     const tags = snapshot.docs.map((docSnap) => ({
       id: docSnap.id,
       ...docSnap.data()
     }));
     callback(tags);
-  });
+  }, onError);
 };
 
 export const uploadLocalTags = async (userId, localTags = []) => {
@@ -232,18 +232,18 @@ export const saveSettings = async (userId, settingsData) => {
   await setDoc(settingsDoc(userId), stripUndefined({ ...settingsData, updatedAt: serverTimestamp() }), { merge: true });
 };
 
-export const subscribeToSettings = (userId, callback) => {
+export const subscribeToSettings = (userId, callback, onError) => {
   return onSnapshot(settingsDoc(userId), (snapshot) => {
     callback(snapshot.exists() ? snapshot.data() : null);
-  });
+  }, onError);
 };
 
 export const saveProfile = async (userId, profileData) => {
   await setDoc(profileDoc(userId), stripUndefined({ ...profileData, updatedAt: serverTimestamp() }), { merge: true });
 };
 
-export const subscribeToProfile = (userId, callback) => {
+export const subscribeToProfile = (userId, callback, onError) => {
   return onSnapshot(profileDoc(userId), (snapshot) => {
     callback(snapshot.exists() ? snapshot.data() : null);
-  });
+  }, onError);
 };

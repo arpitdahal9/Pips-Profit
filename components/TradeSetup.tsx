@@ -3,7 +3,7 @@ import { Target, ChevronDown, ChevronUp, Plus, Edit2, Trash2, Save, X, CheckCirc
 import { useStore } from '../context/StoreContext';
 import { useTheme } from '../context/ThemeContext';
 import { Strategy } from '../types';
-import EnhancedPhotoViewer from './EnhancedPhotoViewer';
+import PhotoAnnotator from './PhotoAnnotator';
 import PhotoUpload from './PhotoUpload';
 
 const TradeSetup: React.FC = () => {
@@ -17,6 +17,8 @@ const TradeSetup: React.FC = () => {
   const [newStrategyPhotos, setNewStrategyPhotos] = useState<string[]>([]);
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
   const [viewingPhotoStrategy, setViewingPhotoStrategy] = useState<Strategy | null>(null);
+  const [showPhotoViewer, setShowPhotoViewer] = useState(false);
+  const [activePhotoUrl, setActivePhotoUrl] = useState<string | null>(null);
 
   const textPrimary = isLightTheme ? 'text-slate-900' : 'text-white';
   const textSecondary = isLightTheme ? 'text-slate-600' : 'text-slate-400';
@@ -25,27 +27,27 @@ const TradeSetup: React.FC = () => {
   // Calculate strategy stats
   const strategyStats = useMemo(() => {
     return strategies.map(strategy => {
-      const strategyTrades = trades.filter(t => 
+      const strategyTrades = trades.filter(t =>
         t.strategy === strategy.title || t.strategyId === strategy.id
       );
-      
+
       const strategyPnl = strategyTrades.reduce((sum, t) => sum + t.pnl + (t.commission || 0), 0);
       const strategyWins = strategyTrades.filter(t => t.status === 'WIN').length;
       const strategyLosses = strategyTrades.filter(t => t.status === 'LOSS').length;
-      const strategyWinRate = strategyTrades.length > 0 
-        ? (strategyWins / strategyTrades.length) * 100 
+      const strategyWinRate = strategyTrades.length > 0
+        ? (strategyWins / strategyTrades.length) * 100
         : 0;
-      
-      // Calculate Total Loss (sum of all losses)
-      const totalLoss = Math.abs(strategyTrades
-        .filter(t => t.pnl < 0)
-        .reduce((sum, t) => sum + t.pnl + (t.commission || 0), 0));
+
+      // Calculate Total Wins (sum of all profits)
+      const totalWins = strategyTrades
+        .filter(t => t.pnl > 0)
+        .reduce((sum, t) => sum + t.pnl + (t.commission || 0), 0);
 
       return {
         strategy,
         trades: strategyTrades.length,
         winRate: strategyWinRate,
-        totalLoss
+        totalWins
       };
     });
   }, [strategies, trades]);
@@ -101,7 +103,7 @@ const TradeSetup: React.FC = () => {
   const handleEditStrategy = (strategy: Strategy) => {
     setEditingStrategy(strategy);
     setNewStrategyTitle(strategy.title);
-    setNewStrategyItems(strategy.items.length > 0 
+    setNewStrategyItems(strategy.items.length > 0
       ? strategy.items.map(item => item.text)
       : ['']
     );
@@ -110,8 +112,8 @@ const TradeSetup: React.FC = () => {
   };
 
   const handleViewPhoto = (strategy: Strategy, index: number) => {
-    setViewingPhotoStrategy(strategy);
-    setViewingPhotoIndex(index);
+    setActivePhotoUrl(strategy.photos?.[index] || null);
+    setShowPhotoViewer(true);
   };
 
   return (
@@ -158,7 +160,7 @@ const TradeSetup: React.FC = () => {
         {/* Strategy List */}
         {strategyStats.length > 0 ? (
           <div className="space-y-4">
-            {strategyStats.map(({ strategy, trades, winRate, totalLoss }) => {
+            {strategyStats.map(({ strategy, trades, winRate, totalWins }) => {
               const isExpanded = expandedStrategyId === strategy.id;
               const strategyPhotos = strategy.photos || [];
 
@@ -212,7 +214,7 @@ const TradeSetup: React.FC = () => {
                           )}
                         </div>
                       ) : (
-                        <div 
+                        <div
                           className="w-full h-32 rounded-xl border-2 border-dashed flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity"
                           style={{ borderColor: `${theme.primary}50` }}
                           onClick={() => handleEditStrategy(strategy)}
@@ -238,9 +240,9 @@ const TradeSetup: React.FC = () => {
                         </p>
                       </div>
                       <div className="text-center">
-                        <p className={`text-xs ${textSecondary} mb-1`}>Total loss</p>
+                        <p className={`text-xs ${textSecondary} mb-1`}>Total wins</p>
                         <p className={`text-lg font-bold ${textPrimary} font-mono`}>
-                          ${totalLoss.toFixed(2)}
+                          ${totalWins.toFixed(2)}
                         </p>
                       </div>
                     </div>
@@ -272,8 +274,8 @@ const TradeSetup: React.FC = () => {
                           <div className="space-y-2">
                             {strategy.items.map((item) => (
                               <div key={item.id} className="flex items-start gap-3 p-2 rounded-lg">
-                                <CheckCircle2 
-                                  size={18} 
+                                <CheckCircle2
+                                  size={18}
                                   className={`mt-0.5 flex-shrink-0 ${item.checked ? 'text-emerald-400' : textSecondary}`}
                                 />
                                 <span className={`text-sm ${item.checked ? 'line-through text-slate-500' : textPrimary}`}>
@@ -364,6 +366,7 @@ const TradeSetup: React.FC = () => {
                     theme={theme}
                     isLightTheme={isLightTheme}
                     label="Attach Screenshot"
+                    mode="setup"
                   />
                 </div>
 
@@ -433,20 +436,21 @@ const TradeSetup: React.FC = () => {
           </div>
         )}
 
-        {/* Enhanced Photo Viewer */}
-        {viewingPhotoStrategy && viewingPhotoIndex !== null && (
-          <EnhancedPhotoViewer
-            images={viewingPhotoStrategy.photos || []}
-            currentIndex={viewingPhotoIndex}
-            isOpen={true}
-            onClose={() => {
-              setViewingPhotoStrategy(null);
-              setViewingPhotoIndex(null);
-            }}
-            onNavigate={(index) => setViewingPhotoIndex(index)}
-            theme={theme}
-          />
-        )}
+        {/* Photo Viewer (using PhotoAnnotator in viewOnly mode) */}
+        <PhotoAnnotator
+          isOpen={showPhotoViewer}
+          onClose={() => {
+            setShowPhotoViewer(false);
+            setActivePhotoUrl(null);
+          }}
+          onSave={() => { }} // Not used in viewOnly
+          strategies={strategies}
+          theme={theme}
+          isLightTheme={isLightTheme}
+          initialImageUrl={activePhotoUrl || undefined}
+          viewOnly={false}
+          mode="setup"
+        />
       </div>
     </div>
   );
