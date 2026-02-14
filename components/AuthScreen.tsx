@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Zap, ArrowRight, Lock, Delete, User, AlertTriangle, Check } from 'lucide-react';
+import { useStore } from '../context/StoreContext';
 
 interface AuthScreenProps {
   onAuthenticated: () => void;
 }
 
 const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
+  const { clearAllData } = useStore();
   const [view, setView] = useState<'register_name' | 'register_pin' | 'set_lockout' | 'login'>('register_name');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
@@ -53,19 +55,20 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
     setError('');
   };
 
-  const handleResetPin = () => {
-    // Clear all app data
-    localStorage.removeItem('velox_user');
-    localStorage.removeItem('velox_trades');
-    localStorage.removeItem('velox_accounts');
-    localStorage.removeItem('pips_theme');
-    localStorage.removeItem('pips_learn_progress');
-    // Reset state
+  const handleResetPin = async () => {
+    // Clear all app data via store (state + storage + cloud)
+    await clearAllData();
+
+    // Reset local auth state
     setStoredUser(null);
     setShowResetConfirm(false);
     setPin('');
     setName('');
     setView('register_name');
+    // Clear lockout state
+    setFailedAttempts(0);
+    setLockUntil(null);
+    setError('');
   };
 
   useEffect(() => {
@@ -284,8 +287,8 @@ const AuthScreen: React.FC<AuthScreenProps> = ({ onAuthenticated }) => {
                     key={option.value}
                     onClick={() => setLockoutTime(option.value)}
                     className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-center justify-between ${lockoutTime === option.value
-                        ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-white'
-                        : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700'
+                      ? 'border-[#8b5cf6] bg-[#8b5cf6]/10 text-white'
+                      : 'border-slate-800 bg-slate-900/50 text-slate-400 hover:border-slate-700'
                       }`}
                   >
                     <span className="font-medium">{option.label}</span>

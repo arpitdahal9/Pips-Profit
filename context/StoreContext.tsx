@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, PropsWithChildren } from 'react';
 import { Trade, Strategy, Tag, TradingAccount } from '../types';
 import { MOCK_TRADES, MOCK_STRATEGIES, MOCK_TAGS } from '../constants';
-import { onAuthStateChange } from '../src/authService';
+import { onAuthStateChange, logoutUser } from '../src/authService';
 import {
   saveTrade,
   updateTrade as updateTradeCloud,
@@ -81,6 +81,7 @@ interface StoreContextType {
   getAccountBalance: (accountId: string) => number;
   exportData: () => void;
   importData: (file: File) => Promise<{ success: boolean; message: string }>;
+  clearAllData: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -658,6 +659,52 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
     });
   };
 
+  const clearAllData = async () => {
+    // 1. Sign out of Firebase
+    try {
+      await logoutUser();
+    } catch (e) {
+      console.error("Firebase logout failed during reset:", e);
+    }
+
+    // 2. Clear all relevant localStorage keys
+    const keysToRemove = [
+      'velox_user',
+      'velox_trades',
+      'velox_accounts',
+      'velox_strategies',
+      'velox_tags',
+      'velox_settings',
+      'velox_last_active',
+      'velox_backup_prompt_dismissed',
+      'velox_first_use',
+      'pips_theme',
+      'pips_learn_progress',
+      'predict_game_best'
+    ];
+
+    // Also remove any migration keys
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('velox_cloud_migrated_')) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+    // 3. Reset all React state to defaults
+    setUser(null);
+    setTrades(MOCK_TRADES);
+    setStrategies(MOCK_STRATEGIES);
+    setTags(MOCK_TAGS);
+    setAccounts([]);
+    setSettings({ autoExport: false });
+    setCloudUser(null);
+    setSyncStatus('offline');
+    setCloudReady(false);
+  };
+
   const addStrategy = (strategy: Strategy) => {
     setStrategies(prev => [...prev, strategy]);
     if (cloudUser) {
@@ -757,7 +804,8 @@ export const StoreProvider = ({ children }: PropsWithChildren) => {
       deleteAccount,
       getAccountBalance,
       exportData,
-      importData
+      importData,
+      clearAllData
     }}>
       {children}
     </StoreContext.Provider>
